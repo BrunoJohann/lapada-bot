@@ -1,17 +1,16 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
 } from "discord.js";
 import { aggregateDaily } from "../../services/metricsService";
 import { runReport } from "../../services/reportService";
+import { invalidateCache } from "../../utils/redis";
 import { Command } from "../../client";
 import { logger } from "../../utils/logger";
 
 export const data = new SlashCommandBuilder()
   .setName("lapada-report")
   .setDescription("Acione um relatório manualmente")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand((sub) =>
     sub.setName("semanal").setDescription("Gera o relatório semanal agora")
   )
@@ -30,21 +29,24 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
-
   const sub = interaction.options.getSubcommand();
+
+  await interaction.deferReply({ ephemeral: true });
 
   try {
     if (sub === "semanal") {
       await aggregateDaily(interaction.guild.id, new Date());
+      await invalidateCache(`leaderboard:${interaction.guild.id}:*`);
       await runReport(interaction.guild, "weekly");
       await interaction.editReply("✅ Relatório semanal gerado e enviado.");
     } else if (sub === "mensal") {
       await aggregateDaily(interaction.guild.id, new Date());
+      await invalidateCache(`leaderboard:${interaction.guild.id}:*`);
       await runReport(interaction.guild, "monthly");
       await interaction.editReply("✅ Relatório mensal gerado e enviado.");
     } else if (sub === "agregar") {
       await aggregateDaily(interaction.guild.id, new Date());
+      await invalidateCache(`leaderboard:${interaction.guild.id}:*`);
       await interaction.editReply("✅ Agregação diária concluída.");
     }
   } catch (error) {

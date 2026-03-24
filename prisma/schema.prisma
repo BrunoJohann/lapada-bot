@@ -111,6 +111,7 @@ model GuildConfig {
   inactiveThresholdDays Int      @default(14)
   roleDurationDays      Int      @default(7)  // Dias mínimos que o cargo fica após atribuição
   participantRoleIds    String[] @default([]) // Se vazio, todos participam
+  dailyReportHour       Int      @default(23) // Hora do ranking diário (0-23, fuso TIMEZONE)
   timezone              String   @default("America/Sao_Paulo")
 
   createdAt DateTime @default(now())

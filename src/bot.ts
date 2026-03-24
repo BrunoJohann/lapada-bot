@@ -6,6 +6,7 @@ import { createClient } from "./client";
 import { logger } from "./utils/logger";
 import { scheduleWeeklyReport } from "./tasks/weeklyReport";
 import { scheduleMonthlyReport, scheduleDailyAggregate } from "./tasks/monthlyReport";
+import { scheduleDailyLeaderboard } from "./tasks/dailyLeaderboard";
 
 const client = createClient();
 
@@ -89,6 +90,7 @@ client.once(Events.ClientReady, (c) => {
   scheduleWeeklyReport(client);
   scheduleMonthlyReport(client);
   scheduleDailyAggregate(client);
+  scheduleDailyLeaderboard(client);
 });
 
 async function main(): Promise<void> {

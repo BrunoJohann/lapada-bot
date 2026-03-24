@@ -91,8 +91,19 @@ export const data = new SlashCommandBuilder()
       )
   )
   .addSubcommand((sub) =>
-    sub.setName("ver").setDescription("Veja as configurações atuais do bot")
-  );
+    sub
+      .setName("horario-report")
+      .setDescription("Define o horário do ranking diário automático")
+      .addIntegerOption((opt) =>
+        opt
+          .setName("hora")
+          .setDescription("Hora do dia (0–23). Padrão: 23")
+          .setMinValue(0)
+          .setMaxValue(23)
+          .setRequired(true)
+      )
+  )
+;
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.guildId) {
@@ -104,25 +115,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   const sub = interaction.options.getSubcommand();
   const guildId = interaction.guildId;
-
-  if (sub === "ver") {
-    const config = await prisma.guildConfig.findUnique({ where: { guildId } });
-    const participantRoles = config?.participantRoleIds?.length
-      ? config.participantRoleIds.map((id) => `<@&${id}>`).join(", ")
-      : "todos os membros";
-
-    const lines = [
-      `**Canal de relatórios:** ${config?.reportChannelId ? `<#${config.reportChannelId}>` : "não configurado"}`,
-      `**Cargo semanal:** ${config?.weeklyRoleId ? `<@&${config.weeklyRoleId}>` : "não configurado"}`,
-      `**Cargo mensal:** ${config?.monthlyRoleId ? `<@&${config.monthlyRoleId}>` : "não configurado"}`,
-      `**Top N:** ${config?.topN ?? 5} usuários`,
-      `**Duração do cargo:** ${config?.roleDurationDays ?? 7} dias`,
-      `**Inatividade:** ${config?.inactiveThresholdDays ?? 14} dias`,
-      `**Participam das métricas:** ${participantRoles}`,
-    ];
-    await interaction.editReply(lines.join("\n"));
-    return;
-  }
 
   let updateData: Record<string, unknown> = {};
   let confirmMsg = "";
@@ -151,6 +143,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const dias = interaction.options.getInteger("dias", true);
     updateData = { roleDurationDays: dias };
     confirmMsg = `Duração do cargo definida para **${dias}** dias`;
+  } else if (sub === "horario-report") {
+    const hora = interaction.options.getInteger("hora", true);
+    updateData = { dailyReportHour: hora };
+    confirmMsg = `Ranking diário agendado para **${hora}:00**`;
   } else if (sub === "cargo-participante-adicionar") {
     const role = interaction.options.getRole("cargo", true);
     // Adiciona à array sem duplicatas
