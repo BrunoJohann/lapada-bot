@@ -33,8 +33,8 @@ COPY prisma ./prisma/
 # Install production deps only
 RUN pnpm install --frozen-lockfile --prod
 
-# Generate Prisma client in production image
-RUN pnpm prisma generate
+# Copy generated Prisma client from builder (prisma CLI not available in prod)
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy compiled output
 COPY --from=builder /app/dist ./dist
