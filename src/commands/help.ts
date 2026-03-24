@@ -50,11 +50,11 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
           },
           {
             name: "4️⃣ Ajuste o número de premiados",
-            value: "`/lapada-config top-n 3`\nQuantos usuários recebem o cargo. Padrão: **5**.",
+            value: "`/lapada-config top-n-semanal 3`\n`/lapada-config top-n-mensal 3`\nQuantos usuários recebem o cargo em cada período. Padrão: **5**.",
           },
           {
-            name: "5️⃣ Defina a duração do cargo",
-            value: "`/lapada-config duracao-cargo 30`\nPor quantos dias o cargo é mantido após ser atribuído. Padrão: **7 dias**.\nEx: `30` faz o cargo durar um mês mesmo que o usuário saia do top.",
+            name: "5️⃣ Defina a duração dos cargos",
+            value: "`/lapada-config duracao-cargo-semanal 7`\n`/lapada-config duracao-cargo-mensal 30`\nPor quantos dias o cargo é mantido após ser atribuído.\nPadrão: semanal **7 dias**, mensal **30 dias**.",
           },
           {
             name: "6️⃣ Defina o critério de inatividade",
@@ -145,13 +145,16 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
           {
             name: "🔧 Comandos de administrador",
             value: [
-              "`/lapada-config ver` — Veja as configurações atuais",
+              "`/lapada-info` — Veja as configurações atuais do servidor",
               "`/lapada-config canal #canal` — Canal dos relatórios",
               "`/lapada-config cargo-semanal @Cargo` — Cargo do top semanal",
               "`/lapada-config cargo-mensal @Cargo` — Cargo do top mensal",
-              "`/lapada-config top-n 3` — Quantos usuários são premiados",
-              "`/lapada-config duracao-cargo 30` — Dias que o cargo é mantido",
-              "`/lapada-config inatividade 30` — Dias para perder o cargo",
+              "`/lapada-config top-n-semanal 3` — Quantos usuários são premiados no semanal",
+              "`/lapada-config top-n-mensal 3` — Quantos usuários são premiados no mensal",
+              "`/lapada-config duracao-cargo-semanal 7` — Dias que o cargo semanal é mantido",
+              "`/lapada-config duracao-cargo-mensal 30` — Dias que o cargo mensal é mantido",
+              "`/lapada-config inatividade 30` — Dias para perder o cargo por inatividade",
+              "`/lapada-config horario-report 23` — Hora do ranking diário automático (0–23)",
               "`/lapada-config cargo-participante-adicionar @Cargo` — Cargo que participa das métricas",
               "`/lapada-config cargo-participante-remover @Cargo` — Remove cargo da lista",
               "`/lapada-report semanal` — Gera relatório semanal agora",

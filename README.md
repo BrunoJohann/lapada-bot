@@ -124,17 +124,21 @@ Arraste o **cargo do bot para acima** do cargo que ele vai atribuir.
 **2. Configure o bot com os slash commands**
 
 ```
-/lapada-config canal          #seu-canal      → onde os relatórios serão enviados
-/lapada-config cargo-semanal  @Melhores de nós → cargo para o top semanal
-/lapada-config top-n          3                → quantos membros recebem o cargo
-/lapada-config duracao-cargo  30               → dias que o cargo é mantido
-/lapada-config inatividade    30               → dias sem atividade para perder o cargo
+/lapada-config canal                  #seu-canal       → onde os relatórios serão enviados
+/lapada-config cargo-semanal          @Melhores de nós → cargo para o top semanal
+/lapada-config cargo-mensal           @Melhores de nós → cargo para o top mensal
+/lapada-config top-n-semanal          3                → quantos membros recebem o cargo semanal
+/lapada-config top-n-mensal           3                → quantos membros recebem o cargo mensal
+/lapada-config duracao-cargo-semanal  7                → dias que o cargo semanal é mantido
+/lapada-config duracao-cargo-mensal   30               → dias que o cargo mensal é mantido
+/lapada-config inatividade            30               → dias sem atividade para perder o cargo
+/lapada-config horario-report         23               → hora do ranking diário automático (0–23)
 ```
 
 **3. Veja as configurações salvas**
 
 ```
-/lapada-config ver
+/lapada-info
 ```
 
 **4. Teste imediatamente**
@@ -162,13 +166,16 @@ Arraste o **cargo do bot para acima** do cargo que ele vai atribuir.
 
 | Comando | Descrição |
 |---|---|
-| `/lapada-config ver` | Mostra todas as configurações |
+| `/lapada-info` | Mostra todas as configurações do servidor |
 | `/lapada-config canal #canal` | Canal para relatórios automáticos |
 | `/lapada-config cargo-semanal @Cargo` | Cargo do top semanal |
 | `/lapada-config cargo-mensal @Cargo` | Cargo do top mensal |
-| `/lapada-config top-n 3` | Quantos membros recebem o cargo |
-| `/lapada-config duracao-cargo 30` | Dias que o cargo é mantido após atribuição |
+| `/lapada-config top-n-semanal 3` | Quantos membros recebem o cargo semanal |
+| `/lapada-config top-n-mensal 3` | Quantos membros recebem o cargo mensal |
+| `/lapada-config duracao-cargo-semanal 7` | Dias que o cargo semanal é mantido |
+| `/lapada-config duracao-cargo-mensal 30` | Dias que o cargo mensal é mantido |
 | `/lapada-config inatividade 30` | Dias sem atividade para perder o cargo |
+| `/lapada-config horario-report 23` | Hora do ranking diário automático (0–23) |
 | `/lapada-config cargo-participante-adicionar @Cargo` | Só este cargo participa das métricas |
 | `/lapada-config cargo-participante-remover @Cargo` | Remove cargo da lista de participantes |
 | `/lapada-report semanal` | Gera o relatório semanal agora |
@@ -199,7 +206,7 @@ score final = score × (1 + dias_consecutivos × 5%)
 | **Relatório semanal** | Toda segunda-feira às 08:00 (Brasília) |
 | **Relatório mensal** | Todo dia 1 do mês às 08:00 (Brasília) |
 | **Cargo atribuído** | Top N membros com maior score recebem o cargo |
-| **Cargo removido por prazo** | Após `duracao-cargo` dias desde a atribuição |
+| **Cargo removido por prazo** | Após `duracao-cargo-semanal` ou `duracao-cargo-mensal` dias desde a atribuição |
 | **Cargo removido por inatividade** | Após `inatividade` dias sem nenhuma atividade |
 
 ---
