@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import { getLeaderboard, getPeriodLabel } from "../services/metricsService";
 import { buildLeaderboardEmbed } from "../utils/embeds";
 import { getCached } from "../utils/redis";
+import { getCachedGuildConfig } from "../utils/guildConfig";
 import { Command } from "../client";
 
 export const data = new SlashCommandBuilder()
@@ -31,14 +32,24 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const cacheKey = `leaderboard:${guildId}:${period}`;
   const entries = await getCached(cacheKey, 60, () => getLeaderboard(guildId, period, 10));
 
-  // Resolve apelidos atuais do servidor (usa cache do Discord em memória)
-  const resolvedEntries = entries.map((e) => ({
-    ...e,
-    username:
-      interaction.guild?.members.cache.get(e.userId)?.displayName ??
-      e.displayName ??
-      e.username,
-  }));
+  const config = await getCachedGuildConfig(guildId);
+  const participantRoleIds = config?.participantRoleIds ?? [];
+
+  // Resolve apelidos e filtra por cargos participantes (se configurado)
+  const resolvedEntries = entries
+    .map((e) => ({
+      ...e,
+      username:
+        interaction.guild?.members.cache.get(e.userId)?.displayName ??
+        e.displayName ??
+        e.username,
+      _member: interaction.guild?.members.cache.get(e.userId),
+    }))
+    .filter((e) => {
+      if (participantRoleIds.length === 0) return true;
+      return participantRoleIds.some((roleId) => e._member?.roles.cache.has(roleId));
+    })
+    .map(({ _member, ...e }) => e);
 
   const periodLabel = getPeriodLabel(new Date(), period);
   const embed = buildLeaderboardEmbed({ period, entries: resolvedEntries, periodLabel });

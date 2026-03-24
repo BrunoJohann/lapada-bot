@@ -37,7 +37,15 @@ export async function processRewards(
   }
 
   const topN = period === "weekly" ? (config?.weeklyTopN ?? 5) : (config?.monthlyTopN ?? 5);
-  const topUsers = await getLeaderboard(guild.id, period, topN);
+  const participantRoleIds = config?.participantRoleIds ?? [];
+  const allUsers = await getLeaderboard(guild.id, period, topN * 3); // busca mais para compensar filtro
+  const topUsers = allUsers
+    .filter((u) => {
+      if (participantRoleIds.length === 0) return true;
+      const member = guild.members.cache.get(u.userId);
+      return participantRoleIds.some((roleId) => member?.roles.cache.has(roleId));
+    })
+    .slice(0, topN);
 
   const topUserIds = new Set(topUsers.map((u) => u.userId));
 
