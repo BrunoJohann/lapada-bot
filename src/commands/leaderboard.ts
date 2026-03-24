@@ -47,7 +47,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     }))
     .filter((e) => {
       if (participantRoleIds.length === 0) return true;
-      return participantRoleIds.some((roleId) => e._member?.roles.cache.has(roleId));
+      if (!e._member) return true; // não está no cache, inclui por padrão
+      return participantRoleIds.some((roleId) => e._member!.roles.cache.has(roleId));
     })
     .map(({ _member, ...e }) => e);
 
