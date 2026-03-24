@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma/
 
-# Install all deps (including dev) for build
+# Install all dependencies
 RUN pnpm install --frozen-lockfile
 
 # Generate Prisma client
@@ -19,18 +19,5 @@ RUN pnpm prisma generate
 COPY tsconfig.json ./
 COPY src ./src/
 RUN pnpm build
-
-# ---- Production image ----
-FROM node:22-alpine AS runner
-
-WORKDIR /app
-
-# Copy node_modules from builder (includes Prisma client already generated)
-COPY --from=builder /app/node_modules ./node_modules
-
-# Copy compiled output and required files
-COPY --from=builder /app/dist ./dist
-COPY prisma ./prisma/
-COPY package.json ./
 
 CMD ["node", "dist/bot.js"]
