@@ -20,4 +20,7 @@ COPY tsconfig.json ./
 COPY src ./src/
 RUN pnpm build
 
-CMD ["node", "dist/bot.js"]
+COPY start.sh ./
+RUN chmod +x start.sh
+
+CMD ["sh", "start.sh"]

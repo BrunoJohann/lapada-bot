@@ -3,6 +3,5 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node_modules/.bin/prisma db push --accept-data-loss && node dist/bot.js"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
