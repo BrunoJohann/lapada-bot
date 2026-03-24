@@ -44,7 +44,7 @@ export function scheduleDailyLeaderboard(client: Client): void {
           const today = new Date();
           await aggregateDaily(guild.id, today);
 
-          const entries = await getLeaderboard(guild.id, "weekly", config.topN ?? 10);
+          const entries = await getLeaderboard(guild.id, "weekly", config.weeklyTopN ?? 10);
 
           const resolvedEntries = entries.map((e) => ({
             ...e,

@@ -36,7 +36,7 @@ export async function processRewards(
     return { assigned: [], removed: [], topUsers: [], roleName: "N/A" };
   }
 
-  const topN = config?.topN ?? 5;
+  const topN = period === "weekly" ? (config?.weeklyTopN ?? 5) : (config?.monthlyTopN ?? 5);
   const topUsers = await getLeaderboard(guild.id, period, topN);
 
   const topUserIds = new Set(topUsers.map((u) => u.userId));
@@ -74,7 +74,9 @@ export async function processRewards(
   }
 
   // Remove cargo de quem não está mais no top N, respeitando roleDurationDays
-  const roleDurationDays = config?.roleDurationDays ?? 7;
+  const roleDurationDays = period === "weekly"
+    ? (config?.weeklyRoleDurationDays ?? 7)
+    : (config?.monthlyRoleDurationDays ?? 30);
   for (const [, member] of membersWithRole) {
     if (topUserIds.has(member.id)) continue;
 

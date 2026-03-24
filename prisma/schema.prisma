@@ -107,9 +107,11 @@ model GuildConfig {
   reportChannelId       String?
   weeklyRoleId          String?
   monthlyRoleId         String?
-  topN                  Int      @default(5)
+  weeklyTopN            Int      @default(5)
+  monthlyTopN           Int      @default(5)
   inactiveThresholdDays Int      @default(14)
-  roleDurationDays      Int      @default(7)  // Dias mínimos que o cargo fica após atribuição
+  weeklyRoleDurationDays  Int    @default(7)  // Dias mínimos que o cargo semanal fica após atribuição
+  monthlyRoleDurationDays Int    @default(30) // Dias mínimos que o cargo mensal fica após atribuição
   participantRoleIds    String[] @default([]) // Se vazio, todos participam
   dailyReportHour       Int      @default(23) // Hora do ranking diário (0-23, fuso TIMEZONE)
   timezone              String   @default("America/Sao_Paulo")

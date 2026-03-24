@@ -37,8 +37,21 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub
-      .setName("top-n")
-      .setDescription("Define quantos usuários recebem o cargo de recompensa")
+      .setName("top-n-semanal")
+      .setDescription("Define quantos usuários recebem o cargo semanal")
+      .addIntegerOption((opt) =>
+        opt
+          .setName("quantidade")
+          .setDescription("Número de usuários (1–20)")
+          .setMinValue(1)
+          .setMaxValue(20)
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("top-n-mensal")
+      .setDescription("Define quantos usuários recebem o cargo mensal")
       .addIntegerOption((opt) =>
         opt
           .setName("quantidade")
@@ -79,12 +92,25 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub
-      .setName("duracao-cargo")
-      .setDescription("Define por quantos dias o cargo é mantido após ser atribuído")
+      .setName("duracao-cargo-semanal")
+      .setDescription("Define por quantos dias o cargo semanal é mantido após ser atribuído")
       .addIntegerOption((opt) =>
         opt
           .setName("dias")
           .setDescription("Dias que o cargo fica (1–90). Padrão: 7")
+          .setMinValue(1)
+          .setMaxValue(90)
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("duracao-cargo-mensal")
+      .setDescription("Define por quantos dias o cargo mensal é mantido após ser atribuído")
+      .addIntegerOption((opt) =>
+        opt
+          .setName("dias")
+          .setDescription("Dias que o cargo fica (1–90). Padrão: 30")
           .setMinValue(1)
           .setMaxValue(90)
           .setRequired(true)
@@ -131,18 +157,26 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const channel = interaction.options.getChannel("canal", true);
     updateData = { reportChannelId: channel.id };
     confirmMsg = `Canal de relatórios definido para <#${channel.id}>`;
-  } else if (sub === "top-n") {
+  } else if (sub === "top-n-semanal") {
     const topN = interaction.options.getInteger("quantidade", true);
-    updateData = { topN };
-    confirmMsg = `Top N definido para **${topN}** usuários`;
+    updateData = { weeklyTopN: topN };
+    confirmMsg = `Top N semanal definido para **${topN}** usuários`;
+  } else if (sub === "top-n-mensal") {
+    const topN = interaction.options.getInteger("quantidade", true);
+    updateData = { monthlyTopN: topN };
+    confirmMsg = `Top N mensal definido para **${topN}** usuários`;
   } else if (sub === "inatividade") {
     const dias = interaction.options.getInteger("dias", true);
     updateData = { inactiveThresholdDays: dias };
     confirmMsg = `Inatividade definida para **${dias}** dias`;
-  } else if (sub === "duracao-cargo") {
+  } else if (sub === "duracao-cargo-semanal") {
     const dias = interaction.options.getInteger("dias", true);
-    updateData = { roleDurationDays: dias };
-    confirmMsg = `Duração do cargo definida para **${dias}** dias`;
+    updateData = { weeklyRoleDurationDays: dias };
+    confirmMsg = `Duração do cargo semanal definida para **${dias}** dias`;
+  } else if (sub === "duracao-cargo-mensal") {
+    const dias = interaction.options.getInteger("dias", true);
+    updateData = { monthlyRoleDurationDays: dias };
+    confirmMsg = `Duração do cargo mensal definida para **${dias}** dias`;
   } else if (sub === "horario-report") {
     const hora = interaction.options.getInteger("hora", true);
     updateData = { dailyReportHour: hora };
