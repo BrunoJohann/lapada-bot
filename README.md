@@ -204,6 +204,42 @@ score final = score × (1 + dias_consecutivos × 5%)
 
 ---
 
+## ☁️ Deploy em produção (grátis)
+
+Stack recomendada: **Railway** (bot) + **Supabase** (PostgreSQL) + **Upstash** (Redis)
+
+| Serviço | Uso | Limite grátis |
+|---|---|---|
+| [Supabase](https://supabase.com) | PostgreSQL | 500 MB |
+| [Upstash](https://upstash.com) | Redis | 10.000 req/dia |
+| [Railway](https://railway.app) | Bot Node.js | ~$5 crédito/mês |
+
+### Passo a passo
+
+**1. PostgreSQL no Supabase**
+1. Crie um projeto em [supabase.com](https://supabase.com)
+2. Vá em **Settings → Database** e copie a *Connection string* (URI)
+3. Acrescente `?schema=public` no final
+
+**2. Redis no Upstash**
+1. Crie um banco em [upstash.com](https://upstash.com)
+2. Copie a URL no formato `rediss://default:PASSWORD@ENDPOINT.upstash.io:6379`
+
+**3. Bot no Railway**
+1. Crie um projeto em [railway.app](https://railway.app)
+2. Conecte o repositório `BrunoJohann/lapada-bot`
+3. Em **Variables**, adicione todas as variáveis do `.env.example` com valores reais
+4. Railway detecta o `railway.toml` e faz o build via Docker automaticamente
+
+**4. Configure o banco de produção (rode uma vez localmente)**
+
+```bash
+DATABASE_URL="sua-url-supabase" pnpm db:push
+DATABASE_URL="sua-url-supabase" pnpm deploy:commands
+```
+
+---
+
 ## 🐳 Scripts disponíveis
 
 ```bash
