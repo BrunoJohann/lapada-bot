@@ -12,7 +12,7 @@ const client = createClient();
 // Carrega eventos dinamicamente
 async function loadEvents(): Promise<void> {
   const eventsPath = path.join(__dirname, "events");
-  const eventFiles = fs.readdirSync(eventsPath).filter((f) => f.endsWith(".js") || f.endsWith(".ts"));
+  const eventFiles = fs.readdirSync(eventsPath).filter((f) => (f.endsWith(".js") || f.endsWith(".ts")) && !f.endsWith(".d.ts"));
 
   for (const file of eventFiles) {
     const event = await import(path.join(eventsPath, file));
@@ -34,7 +34,7 @@ async function loadCommands(): Promise<void> {
 
   for (const dir of commandDirs) {
     if (!fs.existsSync(dir)) continue;
-    const files = fs.readdirSync(dir).filter((f) => (f.endsWith(".js") || f.endsWith(".ts")) && !fs.statSync(path.join(dir, f)).isDirectory());
+    const files = fs.readdirSync(dir).filter((f) => (f.endsWith(".js") || f.endsWith(".ts")) && !f.endsWith(".d.ts") && !fs.statSync(path.join(dir, f)).isDirectory());
 
     for (const file of files) {
       const command = await import(path.join(dir, file));

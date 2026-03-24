@@ -1,4 +1,4 @@
-import { Events, MessageReaction, User, PartialMessageReaction, PartialUser } from "discord.js";
+import { Events, MessageReaction, User } from "discord.js";
 import { prisma } from "../database/prisma";
 import { getCachedGuildConfig, isParticipant } from "../utils/guildConfig";
 import { logger } from "../utils/logger";
@@ -7,8 +7,8 @@ export const name = Events.MessageReactionAdd;
 export const once = false;
 
 export async function execute(
-  reaction: MessageReaction | PartialMessageReaction,
-  user: User | PartialUser
+  reaction: MessageReaction,
+  user: User
 ): Promise<void> {
   if (user.bot) return;
 
