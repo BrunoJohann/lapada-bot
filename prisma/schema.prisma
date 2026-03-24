@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id // Discord user ID
+  guildId     String
+  username    String
+  displayName String?
+  joinedAt    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages          MessageActivity[]
+  voiceSessions     VoiceSession[]
+  reactionsReceived ReactionActivity[] @relation("ReactionsReceived")
+  reactionsGiven    ReactionActivity[] @relation("ReactionsGiven")
+  dailyAggregates   DailyAggregate[]
+  roleAssignments   RoleAssignment[]
+
+  @@unique([id, guildId])
+  @@index([guildId])
+}
+
+model MessageActivity {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  guildId   String
+  channelId String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, guildId, createdAt])
+  @@index([guildId, createdAt])
+}
+
+model VoiceSession {
+  id         Int       @id @default(autoincrement())
+  userId     String
+  guildId    String
+  channelId  String
+  joinedAt   DateTime  @default(now())
+  leftAt     DateTime?
+  durationMs Int? // calculado ao sair
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, guildId, joinedAt])
+}
+
+model ReactionActivity {
+  id           Int      @id @default(autoincrement())
+  targetUserId String // quem recebeu a reação
+  actorUserId  String // quem reagiu
+  guildId      String
+  channelId    String
+  emoji        String
+  createdAt    DateTime @default(now())
+
+  targetUser User @relation("ReactionsReceived", fields: [targetUserId], references: [id])
+  actorUser  User @relation("ReactionsGiven", fields: [actorUserId], references: [id])
+
+  @@index([targetUserId, guildId, createdAt])
+}
+
+model DailyAggregate {
+  id             Int      @id @default(autoincrement())
+  userId         String
+  guildId        String
+  date           DateTime // truncado para o dia (00:00:00 UTC)
+  messageCount   Int      @default(0)
+  voiceMinutes   Int      @default(0)
+  reactionsCount Int      @default(0) // reações recebidas
+  score          Float    @default(0)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, guildId, date])
+  @@index([guildId, date])
+  @@index([userId, guildId])
+}
+
+model RoleAssignment {
+  id         Int       @id @default(autoincrement())
+  userId     String
+  guildId    String
+  roleId     String
+  roleName   String
+  assignedAt DateTime  @default(now())
+  removedAt  DateTime?
+  reason     String // "weekly_top", "monthly_top", "inactive_removal", "rank_drop"
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, guildId])
+  @@index([guildId, roleId])
+}
+
+model GuildConfig {
+  guildId               String  @id
+  reportChannelId       String?
+  weeklyRoleId          String?
+  monthlyRoleId         String?
+  topN                  Int      @default(5)
+  inactiveThresholdDays Int      @default(14)
+  roleDurationDays      Int      @default(7)  // Dias mínimos que o cargo fica após atribuição
+  participantRoleIds    String[] @default([]) // Se vazio, todos participam
+  timezone              String   @default("America/Sao_Paulo")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
