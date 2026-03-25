@@ -92,7 +92,7 @@ export function buildLeaderboardEmbed(data: {
     .setDescription(description || "Nenhuma atividade registrada neste período.")
     .setColor(COLORS.gold)
     .setTimestamp()
-    .setFooter({ text: "Atualizado a cada hora · use /lapada-report agregar para forçar atualização" });
+    .setFooter({ text: "Atualizado automaticamente · cache de 30min · use /lapada-report agregar para forçar" });
 }
 
 export function buildReportEmbed(data: {

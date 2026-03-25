@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
-import { getLeaderboard, getPeriodLabel } from "../services/metricsService";
+import { getLeaderboard, getPeriodLabel, aggregateDaily } from "../services/metricsService";
 import { buildLeaderboardEmbed } from "../utils/embeds";
-import { getCached } from "../utils/redis";
+import { getCached, getRedis } from "../utils/redis";
 import { getCachedGuildConfig } from "../utils/guildConfig";
 import { Command } from "../client";
 
@@ -30,9 +30,18 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const guildId = interaction.guildId;
 
   const cacheKey = `leaderboard:${guildId}:${period}`;
-  const entries = await getCached(cacheKey, 60, () => getLeaderboard(guildId, period, 10));
+  const redis = getRedis();
+  const isCached = redis ? await redis.exists(cacheKey) : false;
+
+  // Se não tem cache, agrega dados frescos antes de buscar no banco
+  if (!isCached) {
+    await aggregateDaily(guildId, new Date());
+  }
 
   const config = await getCachedGuildConfig(guildId);
+  const topN = period === "weekly" ? (config?.weeklyTopN ?? 10) : (config?.monthlyTopN ?? 10);
+  const entries = await getCached(cacheKey, 1800, () => getLeaderboard(guildId, period, topN));
+
   const participantRoleIds = config?.participantRoleIds ?? [];
 
   // Resolve apelidos e filtra por cargos participantes (se configurado)
