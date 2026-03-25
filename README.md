@@ -132,7 +132,9 @@ Arraste o **cargo do bot para acima** do cargo que ele vai atribuir.
 /lapada-config duracao-cargo-semanal  7                → dias que o cargo semanal é mantido
 /lapada-config duracao-cargo-mensal   30               → dias que o cargo mensal é mantido
 /lapada-config inatividade            30               → dias sem atividade para perder o cargo
-/lapada-config horario-report         23               → hora do ranking diário automático (0–23)
+/lapada-config horario-report         23               → hora(s) do ranking diário (ex: 9,21 para dois horários)
+/lapada-config horario-semanal        Segunda 8        → dia e hora do relatório semanal
+/lapada-config horario-mensal         1 8              → dia do mês e hora do relatório mensal
 ```
 
 **3. Veja as configurações salvas**
@@ -175,7 +177,9 @@ Arraste o **cargo do bot para acima** do cargo que ele vai atribuir.
 | `/lapada-config duracao-cargo-semanal 7` | Dias que o cargo semanal é mantido |
 | `/lapada-config duracao-cargo-mensal 30` | Dias que o cargo mensal é mantido |
 | `/lapada-config inatividade 30` | Dias sem atividade para perder o cargo |
-| `/lapada-config horario-report 23` | Hora do ranking diário automático (0–23) |
+| `/lapada-config horario-report 23` | Hora(s) do ranking diário (ex: `9,21` para dois horários) |
+| `/lapada-config horario-semanal Segunda 8` | Dia da semana e hora do relatório semanal |
+| `/lapada-config horario-mensal 1 8` | Dia do mês e hora do relatório mensal |
 | `/lapada-config cargo-participante-adicionar @Cargo` | Só este cargo participa das métricas |
 | `/lapada-config cargo-participante-remover @Cargo` | Remove cargo da lista de participantes |
 | `/lapada-report semanal` | Gera o relatório semanal agora |
@@ -203,8 +207,8 @@ score final = score × (1 + dias_consecutivos × 5%)
 
 | Evento | Quando |
 |---|---|
-| **Relatório semanal** | Toda segunda-feira às 08:00 (Brasília) |
-| **Relatório mensal** | Todo dia 1 do mês às 08:00 (Brasília) |
+| **Relatório semanal** | Configurável via `/lapada-config horario-semanal` (padrão: segunda às 08:00) |
+| **Relatório mensal** | Configurável via `/lapada-config horario-mensal` (padrão: dia 1 às 08:00) |
 | **Cargo atribuído** | Top N membros com maior score recebem o cargo |
 | **Cargo removido por prazo** | Após `duracao-cargo-semanal` ou `duracao-cargo-mensal` dias desde a atribuição |
 | **Cargo removido por inatividade** | Após `inatividade` dias sem nenhuma atividade |

@@ -61,8 +61,12 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
             value: "`/lapada-config inatividade 30`\nUsuários sem atividade por este número de dias perdem o cargo. Padrão: **14 dias**.",
           },
           {
+            name: "7️⃣ Configure os horários dos relatórios (opcional)",
+            value: "`/lapada-config horario-report 23` — Ranking diário às 23h (use `9,21` para dois horários)\n`/lapada-config horario-semanal Segunda 8` — Relatório semanal toda segunda às 8h\n`/lapada-config horario-mensal 1 8` — Relatório mensal todo dia 1 às 8h",
+          },
+          {
             name: "✅ Pronto!",
-            value: "O bot já está monitorando. Relatórios são enviados automaticamente toda **segunda-feira** (semanal) e todo **dia 1** do mês (mensal).\n\nPara testar agora: `/lapada-report semanal`",
+            value: "O bot já está monitorando. Use `/lapada-info` para ver as configurações atuais.\n\nPara testar agora: `/lapada-report semanal`",
           }
         )
         .setFooter({ text: "Use /help topico:Todos os comandos para ver todos os comandos" });
@@ -118,7 +122,7 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
           },
           {
             name: "⏰ Quando acontece",
-            value: "**Semanal:** toda segunda-feira às 08:00\n**Mensal:** todo dia 1 do mês às 08:00\n*(horário de Brasília)*",
+            value: "**Semanal:** configurável via `/lapada-config horario-semanal` (padrão: segunda às 08:00)\n**Mensal:** configurável via `/lapada-config horario-mensal` (padrão: dia 1 às 08:00)\n**Ranking diário:** configurável via `/lapada-config horario-report` (padrão: 23:00)",
           },
           {
             name: "🛠️ Forçar manualmente",
@@ -154,7 +158,9 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
               "`/lapada-config duracao-cargo-semanal 7` — Dias que o cargo semanal é mantido",
               "`/lapada-config duracao-cargo-mensal 30` — Dias que o cargo mensal é mantido",
               "`/lapada-config inatividade 30` — Dias para perder o cargo por inatividade",
-              "`/lapada-config horario-report 23` — Hora do ranking diário automático (0–23)",
+              "`/lapada-config horario-report 23` — Hora(s) do ranking diário (ex: `9,21` para dois horários)",
+              "`/lapada-config horario-semanal Segunda 8` — Dia e hora do relatório semanal",
+              "`/lapada-config horario-mensal 1 8` — Dia do mês e hora do relatório mensal",
               "`/lapada-config cargo-participante-adicionar @Cargo` — Cargo que participa das métricas",
               "`/lapada-config cargo-participante-remover @Cargo` — Remove cargo da lista",
               "`/lapada-report semanal` — Gera relatório semanal agora",
