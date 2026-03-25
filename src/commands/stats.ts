@@ -83,6 +83,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     period,
     messageCount: stats.messageCount,
     voiceMinutes: stats.voiceMinutes,
+    streamMinutes: stats.streamMinutes,
     reactionsCount: stats.reactionsCount,
     score: stats.score,
     rank: stats.rank,

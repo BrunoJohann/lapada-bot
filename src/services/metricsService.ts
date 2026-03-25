@@ -1,18 +1,13 @@
 import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
 
-const SCORE_WEIGHTS = {
-  message: 1.0,
-  voiceMinute: 2.0,
-  reaction: 1.5,
-};
-
 export interface UserScore {
   userId: string;
   username: string;
   displayName: string | null;
   messageCount: number;
   voiceMinutes: number;
+  streamMinutes: number;
   reactionsCount: number;
   score: number;
   rank: number;
@@ -21,16 +16,18 @@ export interface UserScore {
 function calculateScore(
   messageCount: number,
   voiceMinutes: number,
+  streamMinutes: number,
   reactionsCount: number,
-  streakDays: number = 0
+  streakDays: number = 0,
+  streamMultiplier: number = 0
 ): number {
   const base =
-    messageCount * SCORE_WEIGHTS.message +
-    voiceMinutes * SCORE_WEIGHTS.voiceMinute +
-    reactionsCount * SCORE_WEIGHTS.reaction;
+    messageCount * 1.0 +
+    voiceMinutes * 2.0 +
+    streamMinutes * streamMultiplier +
+    reactionsCount * 1.5;
 
-  const streakMultiplier = 1 + streakDays * 0.05;
-  return base * streakMultiplier;
+  return base * (1 + streakDays * 0.05);
 }
 
 export async function aggregateDaily(guildId: string, date: Date): Promise<void> {
@@ -39,10 +36,14 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
   const dayEnd = new Date(dayStart);
   dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
 
+  const config = await prisma.guildConfig.findUnique({ where: { guildId } });
+  const streamEnabled    = config?.streamEnabled    ?? false;
+  const streamMultiplier = config?.streamMultiplier ?? 1.5;
+
   const users = await prisma.user.findMany({ where: { guildId } });
 
   for (const user of users) {
-    const [messageCount, voiceSessions, reactionsCount] = await Promise.all([
+    const [messageCount, voiceSessions, streamSessions, reactionsCount] = await Promise.all([
       prisma.messageActivity.count({
         where: { userId: user.id, guildId, createdAt: { gte: dayStart, lt: dayEnd } },
       }),
@@ -50,29 +51,44 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
         where: { userId: user.id, guildId, joinedAt: { gte: dayStart, lt: dayEnd } },
         select: { durationMs: true, leftAt: true, joinedAt: true },
       }),
+      streamEnabled
+        ? prisma.streamSession.findMany({
+            where: { userId: user.id, guildId, startedAt: { gte: dayStart, lt: dayEnd } },
+            select: { durationMs: true, endedAt: true, startedAt: true },
+          })
+        : Promise.resolve([]),
       prisma.reactionActivity.count({
         where: { targetUserId: user.id, guildId, createdAt: { gte: dayStart, lt: dayEnd } },
       }),
     ]);
 
-    if (messageCount === 0 && voiceSessions.length === 0 && reactionsCount === 0) continue;
+    if (messageCount === 0 && voiceSessions.length === 0 && reactionsCount === 0 && streamSessions.length === 0) continue;
 
     const now = Date.now();
+
     const voiceMinutes = Math.floor(
       voiceSessions.reduce((sum, s) => {
         if (s.durationMs !== null) return sum + s.durationMs;
-        // Sessão ainda aberta: conta o tempo decorrido até agora
         if (s.leftAt === null) return sum + (now - s.joinedAt.getTime());
         return sum;
       }, 0) / 60000
     );
 
-    const score = calculateScore(messageCount, voiceMinutes, reactionsCount);
+    const streamMinutes = Math.floor(
+      (streamSessions as Array<{ durationMs: number | null; endedAt: Date | null; startedAt: Date }>)
+        .reduce((sum, s) => {
+          if (s.durationMs !== null) return sum + s.durationMs;
+          if (s.endedAt === null) return sum + (now - s.startedAt.getTime());
+          return sum;
+        }, 0) / 60000
+    );
+
+    const score = calculateScore(messageCount, voiceMinutes, streamMinutes, reactionsCount, 0, streamEnabled ? streamMultiplier : 0);
 
     await prisma.dailyAggregate.upsert({
       where: { userId_guildId_date: { userId: user.id, guildId, date: dayStart } },
-      update: { messageCount, voiceMinutes, reactionsCount, score },
-      create: { userId: user.id, guildId, date: dayStart, messageCount, voiceMinutes, reactionsCount, score },
+      update: { messageCount, voiceMinutes, streamMinutes, reactionsCount, score },
+      create: { userId: user.id, guildId, date: dayStart, messageCount, voiceMinutes, streamMinutes, reactionsCount, score },
     });
   }
 
@@ -90,7 +106,7 @@ export async function getLeaderboard(
   const aggregates = await prisma.dailyAggregate.groupBy({
     by: ["userId"],
     where: { guildId, date: { gte: periodStart } },
-    _sum: { messageCount: true, voiceMinutes: true, reactionsCount: true, score: true },
+    _sum: { messageCount: true, voiceMinutes: true, streamMinutes: true, reactionsCount: true, score: true },
     orderBy: { _sum: { score: "desc" } },
     take: limit,
   });
@@ -107,6 +123,7 @@ export async function getLeaderboard(
       displayName: user?.displayName ?? null,
       messageCount: agg._sum.messageCount ?? 0,
       voiceMinutes: agg._sum.voiceMinutes ?? 0,
+      streamMinutes: agg._sum.streamMinutes ?? 0,
       reactionsCount: agg._sum.reactionsCount ?? 0,
       score: agg._sum.score ?? 0,
       rank: index + 1,
@@ -124,14 +141,13 @@ export async function getUserStats(
 
   const agg = await prisma.dailyAggregate.aggregate({
     where: { userId, guildId, date: { gte: periodStart } },
-    _sum: { messageCount: true, voiceMinutes: true, reactionsCount: true, score: true },
+    _sum: { messageCount: true, voiceMinutes: true, streamMinutes: true, reactionsCount: true, score: true },
   });
 
   if (!agg._sum.score) return null;
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
 
-  // Calcula rank
   const betterUsers = await prisma.dailyAggregate.groupBy({
     by: ["userId"],
     where: { guildId, date: { gte: periodStart } },
@@ -145,6 +161,7 @@ export async function getUserStats(
     displayName: user?.displayName ?? null,
     messageCount: agg._sum.messageCount ?? 0,
     voiceMinutes: agg._sum.voiceMinutes ?? 0,
+    streamMinutes: agg._sum.streamMinutes ?? 0,
     reactionsCount: agg._sum.reactionsCount ?? 0,
     score: agg._sum.score ?? 0,
     rank: betterUsers.length + 1,
@@ -168,17 +185,14 @@ export async function searchActiveUsers(
     orderBy: { username: "asc" },
   });
 
-  return users.map((u) => ({
-    id: u.id,
-    label: u.displayName ?? u.username,
-  }));
+  return users.map((u) => ({ id: u.id, label: u.displayName ?? u.username }));
 }
 
 export function getPeriodStart(date: Date, period: "weekly" | "monthly"): Date {
   const start = new Date(date);
   if (period === "weekly") {
-    const day = start.getUTCDay(); // 0 = domingo
-    const diff = day === 0 ? -6 : 1 - day; // começa na segunda
+    const day = start.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
     start.setUTCDate(start.getUTCDate() + diff);
   } else {
     start.setUTCDate(1);

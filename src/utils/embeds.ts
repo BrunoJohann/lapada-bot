@@ -20,6 +20,7 @@ export function buildStatsEmbed(data: {
   period: "weekly" | "monthly";
   messageCount: number;
   voiceMinutes: number;
+  streamMinutes?: number;
   reactionsCount: number;
   score: number;
   rank?: number;
@@ -27,27 +28,18 @@ export function buildStatsEmbed(data: {
   const periodLabel = data.period === "weekly" ? "Semana" : "Mês";
 
   const fields: APIEmbedField[] = [
-    {
-      name: "💬 Mensagens",
-      value: data.messageCount.toLocaleString("pt-BR"),
-      inline: true,
-    },
-    {
-      name: "🎙️ Tempo de Voz",
-      value: formatVoiceTime(data.voiceMinutes),
-      inline: true,
-    },
-    {
-      name: "⭐ Reações Recebidas",
-      value: data.reactionsCount.toLocaleString("pt-BR"),
-      inline: true,
-    },
-    {
-      name: "🏆 Score Total",
-      value: `**${data.score.toFixed(1)}** pts`,
-      inline: true,
-    },
+    { name: "💬 Mensagens",    value: data.messageCount.toLocaleString("pt-BR"), inline: true },
+    { name: "🎙️ Tempo de Voz", value: formatVoiceTime(data.voiceMinutes),        inline: true },
   ];
+
+  if (data.streamMinutes && data.streamMinutes > 0) {
+    fields.push({ name: "📺 Tempo de Stream", value: formatVoiceTime(data.streamMinutes), inline: true });
+  }
+
+  fields.push(
+    { name: "⭐ Reações Recebidas", value: data.reactionsCount.toLocaleString("pt-BR"), inline: true },
+    { name: "🏆 Score Total",       value: `**${data.score.toFixed(1)}** pts`,          inline: true },
+  );
 
   if (data.rank !== undefined) {
     fields.push({

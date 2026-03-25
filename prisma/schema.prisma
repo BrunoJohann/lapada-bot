@@ -18,6 +18,7 @@ model User {
 
   messages          MessageActivity[]
   voiceSessions     VoiceSession[]
+  streamSessions    StreamSession[]
   reactionsReceived ReactionActivity[] @relation("ReactionsReceived")
   reactionsGiven    ReactionActivity[] @relation("ReactionsGiven")
   dailyAggregates   DailyAggregate[]
@@ -54,6 +55,20 @@ model VoiceSession {
   @@index([userId, guildId, joinedAt])
 }
 
+model StreamSession {
+  id         Int       @id @default(autoincrement())
+  userId     String
+  guildId    String
+  channelId  String
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+  durationMs Int? // calculado ao parar
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, guildId, startedAt])
+}
+
 model ReactionActivity {
   id           Int      @id @default(autoincrement())
   targetUserId String // quem recebeu a reação
@@ -76,6 +91,7 @@ model DailyAggregate {
   date           DateTime // truncado para o dia (00:00:00 UTC)
   messageCount   Int      @default(0)
   voiceMinutes   Int      @default(0)
+  streamMinutes  Int      @default(0)
   reactionsCount Int      @default(0) // reações recebidas
   score          Float    @default(0)
 
@@ -103,22 +119,24 @@ model RoleAssignment {
 }
 
 model GuildConfig {
-  guildId               String  @id
+  guildId               String   @id
   reportChannelId       String?
   weeklyRoleId          String?
   monthlyRoleId         String?
   weeklyTopN            Int      @default(5)
   monthlyTopN           Int      @default(5)
   inactiveThresholdDays Int      @default(14)
-  weeklyRoleDurationDays  Int    @default(7)  // Dias mínimos que o cargo semanal fica após atribuição
-  monthlyRoleDurationDays Int    @default(30) // Dias mínimos que o cargo mensal fica após atribuição
-  participantRoleIds    String[] @default([]) // Se vazio, todos participam
-  dailyReportHours      Int[]    @default([23]) // Horas do ranking diário (0-23); suporta múltiplos
-  weeklyReportDay       Int      @default(1)   // Dia do relatório semanal (0=Dom...6=Sáb)
-  weeklyReportHour      Int      @default(8)   // Hora do relatório semanal (0-23)
-  monthlyReportDay      Int      @default(1)   // Dia do mês do relatório mensal (1-28)
-  monthlyReportHour     Int      @default(8)   // Hora do relatório mensal (0-23)
+  weeklyRoleDurationDays  Int    @default(7)
+  monthlyRoleDurationDays Int    @default(30)
+  participantRoleIds    String[] @default([])
+  dailyReportHours      Int[]    @default([23])
+  weeklyReportDay       Int      @default(1)
+  weeklyReportHour      Int      @default(8)
+  monthlyReportDay      Int      @default(1)
+  monthlyReportHour     Int      @default(8)
   timezone              String   @default("America/Sao_Paulo")
+  streamEnabled         Boolean  @default(false)
+  streamMultiplier      Float    @default(1.5)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

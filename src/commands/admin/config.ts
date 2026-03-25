@@ -176,6 +176,25 @@ export const data = new SlashCommandBuilder()
           .setRequired(true)
       )
   )
+  .addSubcommand((sub) =>
+    sub
+      .setName("streamer")
+      .setDescription("Configura o rastreamento de streams (tela compartilhada)")
+      .addBooleanOption((opt) =>
+        opt
+          .setName("habilitado")
+          .setDescription("Habilitar ou desabilitar rastreamento de streams")
+          .setRequired(true)
+      )
+      .addNumberOption((opt) =>
+        opt
+          .setName("multiplicador")
+          .setDescription("Pontos por minuto de stream (padrão: 1.5). Deve ser menor que voz (2.0)")
+          .setMinValue(0.1)
+          .setMaxValue(5.0)
+          .setRequired(false)
+      )
+  )
 ;
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -244,6 +263,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const hora = interaction.options.getInteger("hora", true);
     updateData = { monthlyReportDay: dia, monthlyReportHour: hora };
     confirmMsg = `Relatório mensal agendado para todo **dia ${dia}** às **${hora}:00**`;
+  } else if (sub === "streamer") {
+    const habilitado = interaction.options.getBoolean("habilitado", true);
+    const multiplicador = interaction.options.getNumber("multiplicador");
+    updateData = { streamEnabled: habilitado, ...(multiplicador !== null && { streamMultiplier: multiplicador }) };
+    const multMsg = multiplicador !== null ? ` · multiplicador: **${multiplicador}x**` : "";
+    confirmMsg = `Rastreamento de stream **${habilitado ? "habilitado ✅" : "desabilitado ❌"}**${multMsg}`;
   } else if (sub === "cargo-participante-adicionar") {
     const role = interaction.options.getRole("cargo", true);
     // Adiciona à array sem duplicatas

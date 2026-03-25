@@ -31,6 +31,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     `**Ranking diário às:** ${(config?.dailyReportHours ?? [23]).map((h) => `${h}:00`).join(", ")}`,
     `**Relatório semanal:** ${["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][config?.weeklyReportDay ?? 1]} às ${config?.weeklyReportHour ?? 8}:00`,
     `**Relatório mensal:** dia ${config?.monthlyReportDay ?? 1} às ${config?.monthlyReportHour ?? 8}:00`,
+    `**Stream:** ${config?.streamEnabled ? `✅ habilitado · **${config.streamMultiplier}x** pts/min` : "❌ desabilitado"}`,
   ];
 
   await interaction.editReply(lines.join("\n"));
