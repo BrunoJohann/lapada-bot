@@ -38,6 +38,10 @@ export async function processRewards(
 
   const topN = period === "weekly" ? (config?.weeklyTopN ?? 5) : (config?.monthlyTopN ?? 5);
   const participantRoleIds = config?.participantRoleIds ?? [];
+
+  // Garante cache completo de membros antes de qualquer filtro por cargo
+  await guild.members.fetch();
+
   const allUsers = await getLeaderboard(guild.id, period, topN * 3); // busca mais para compensar filtro
   const topUsers = allUsers
     .filter((u) => {
@@ -48,9 +52,6 @@ export async function processRewards(
     .slice(0, topN);
 
   const topUserIds = new Set(topUsers.map((u) => u.userId));
-
-  // Busca membros que já têm o cargo
-  await guild.members.fetch();
   const membersWithRole = guild.members.cache.filter((m) => m.roles.cache.has(roleId));
 
   const assigned: string[] = [];
