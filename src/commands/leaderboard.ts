@@ -39,8 +39,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   }
 
   const config = await getCachedGuildConfig(guildId);
-  const topN = period === "weekly" ? (config?.weeklyTopN ?? 10) : (config?.monthlyTopN ?? 10);
-  const entries = await getCached(cacheKey, 1800, () => getLeaderboard(guildId, period, topN));
+  const entries = await getCached(cacheKey, 1800, () => getLeaderboard(guildId, period, 10));
 
   const participantRoleIds = config?.participantRoleIds ?? [];
 
