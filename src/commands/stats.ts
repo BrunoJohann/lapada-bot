@@ -56,8 +56,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const userInput = interaction.options.getString("usuario");
   const targetId = userInput ?? interaction.user.id;
 
-  // Tenta buscar o membro no cache da guild
-  const member = interaction.guild?.members.cache.get(targetId) as GuildMember | undefined;
+  // Tenta buscar o membro no cache; se não estiver, busca na API do Discord
+  let member = interaction.guild?.members.cache.get(targetId) as GuildMember | undefined;
+  if (!member && interaction.guild) {
+    member = await interaction.guild.members.fetch(targetId).catch(() => undefined);
+  }
   const fallbackName = member?.displayName ?? targetId;
 
   const period = (interaction.options.getString("periodo") ?? "weekly") as "weekly" | "monthly";
