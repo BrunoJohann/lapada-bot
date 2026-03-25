@@ -180,6 +180,9 @@ Arraste o **cargo do bot para acima** do cargo que ele vai atribuir.
 | `/lapada-config horario-report 23` | Hora(s) do ranking diário (ex: `9,21` para dois horários) |
 | `/lapada-config horario-semanal Segunda 8` | Dia da semana e hora do relatório semanal |
 | `/lapada-config horario-mensal 1 8` | Dia do mês e hora do relatório mensal |
+| `/lapada-config voz 2.0` | Multiplicador de pontos por minuto de voz |
+| `/lapada-config streamer true` | Habilita/desabilita rastreamento de stream |
+| `/lapada-config streamer true multiplicador:1.5` | Habilita stream com multiplicador customizado |
 | `/lapada-config cargo-participante-adicionar @Cargo` | Só este cargo participa das métricas |
 | `/lapada-config cargo-participante-remover @Cargo` | Remove cargo da lista de participantes |
 | `/lapada-report semanal` | Gera o relatório semanal agora |
@@ -193,8 +196,11 @@ Arraste o **cargo do bot para acima** do cargo que ele vai atribuir.
 O score combina três tipos de atividade no período:
 
 ```
-score = (mensagens × 1.0) + (minutos em voz × 2.0) + (reações recebidas × 1.5)
+score = (mensagens × 1.0) + (minutos em voz × voiceMultiplier) + (minutos de stream × streamMultiplier) + (reações recebidas × 1.5)
 ```
+
+> Multiplicadores padrão: voz = **2.0**, stream = **1.5** (stream desabilitado por padrão). Configure com `/lapada-config voz` e `/lapada-config streamer`.
+> **Regra:** voz e stream só pontuam se houver **≥2 pessoas** no canal.
 
 **Bônus de streak:** membros ativos em dias consecutivos recebem um multiplicador:
 ```

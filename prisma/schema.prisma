@@ -135,6 +135,7 @@ model GuildConfig {
   monthlyReportDay      Int      @default(1)
   monthlyReportHour     Int      @default(8)
   timezone              String   @default("America/Sao_Paulo")
+  voiceMultiplier       Float    @default(2.0)
   streamEnabled         Boolean  @default(false)
   streamMultiplier      Float    @default(1.5)
 

@@ -84,7 +84,12 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
           },
           {
             name: "🎙️ Tempo de Voz",
-            value: "Cada minuto em canal de voz vale **2 pontos**.",
+            value: "Cada minuto em canal de voz vale pontos conforme o multiplicador configurado (padrão: **2x**). Só conta se houver **≥2 pessoas** no canal.",
+            inline: true,
+          },
+          {
+            name: "📺 Stream",
+            value: "Se habilitado via `/lapada-config streamer`, tempo de stream também gera pontos (padrão: **1.5x**). Só conta se houver **≥2 pessoas** no canal.",
             inline: true,
           },
           {
@@ -102,7 +107,7 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
           },
           {
             name: "📌 Observações",
-            value: "• Mensagens de bots não são contadas\n• Auto-reações não são contadas\n• O score é recalculado diariamente à meia-noite",
+            value: "• Mensagens de bots não são contadas\n• Auto-reações não são contadas\n• Voz/stream sozinho não pontua\n• O score é recalculado diariamente à meia-noite",
           }
         );
 
@@ -161,6 +166,9 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
               "`/lapada-config horario-report 23` — Hora(s) do ranking diário (ex: `9,21` para dois horários)",
               "`/lapada-config horario-semanal Segunda 8` — Dia e hora do relatório semanal",
               "`/lapada-config horario-mensal 1 8` — Dia do mês e hora do relatório mensal",
+              "`/lapada-config voz 2.0` — Multiplicador de pontos por minuto de voz",
+              "`/lapada-config streamer true` — Habilita/desabilita rastreamento de stream",
+              "`/lapada-config streamer true multiplicador:1.5` — Habilita com multiplicador customizado",
               "`/lapada-config cargo-participante-adicionar @Cargo` — Cargo que participa das métricas",
               "`/lapada-config cargo-participante-remover @Cargo` — Remove cargo da lista",
               "`/lapada-report semanal` — Gera relatório semanal agora",

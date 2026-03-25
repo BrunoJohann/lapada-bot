@@ -19,11 +19,12 @@ function calculateScore(
   streamMinutes: number,
   reactionsCount: number,
   streakDays: number = 0,
+  voiceMultiplier: number = 2.0,
   streamMultiplier: number = 0
 ): number {
   const base =
     messageCount * 1.0 +
-    voiceMinutes * 2.0 +
+    voiceMinutes * voiceMultiplier +
     streamMinutes * streamMultiplier +
     reactionsCount * 1.5;
 
@@ -37,6 +38,7 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
   dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
 
   const config = await prisma.guildConfig.findUnique({ where: { guildId } });
+  const voiceMultiplier  = config?.voiceMultiplier  ?? 2.0;
   const streamEnabled    = config?.streamEnabled    ?? false;
   const streamMultiplier = config?.streamMultiplier ?? 1.5;
 
@@ -83,7 +85,7 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
         }, 0) / 60000
     );
 
-    const score = calculateScore(messageCount, voiceMinutes, streamMinutes, reactionsCount, 0, streamEnabled ? streamMultiplier : 0);
+    const score = calculateScore(messageCount, voiceMinutes, streamMinutes, reactionsCount, 0, voiceMultiplier, streamEnabled ? streamMultiplier : 0);
 
     await prisma.dailyAggregate.upsert({
       where: { userId_guildId_date: { userId: user.id, guildId, date: dayStart } },

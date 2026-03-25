@@ -178,6 +178,19 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub
+      .setName("voz")
+      .setDescription("Define o multiplicador de pontos por minuto em canal de voz")
+      .addNumberOption((opt) =>
+        opt
+          .setName("multiplicador")
+          .setDescription("Pontos por minuto de voz (padrão: 2.0)")
+          .setMinValue(0.1)
+          .setMaxValue(10.0)
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
       .setName("streamer")
       .setDescription("Configura o rastreamento de streams (tela compartilhada)")
       .addBooleanOption((opt) =>
@@ -263,6 +276,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const hora = interaction.options.getInteger("hora", true);
     updateData = { monthlyReportDay: dia, monthlyReportHour: hora };
     confirmMsg = `Relatório mensal agendado para todo **dia ${dia}** às **${hora}:00**`;
+  } else if (sub === "voz") {
+    const mult = interaction.options.getNumber("multiplicador", true);
+    updateData = { voiceMultiplier: mult };
+    confirmMsg = `Multiplicador de voz definido para **${mult}x** pts/min`;
   } else if (sub === "streamer") {
     const habilitado = interaction.options.getBoolean("habilitado", true);
     const multiplicador = interaction.options.getNumber("multiplicador");
