@@ -2,10 +2,8 @@ import cron from "node-cron";
 import { Client } from "discord.js";
 import { runReport } from "../services/reportService";
 import { aggregateDaily } from "../services/metricsService";
+import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
-
-// Todo dia 1 do mês às 08:00 (America/Sao_Paulo)
-const MONTHLY_CRON = "0 8 1 * *";
 
 // Todo dia às 00:05 — agrega o dia anterior
 const DAILY_AGGREGATE_CRON = "5 0 * * *";
@@ -13,28 +11,39 @@ const DAILY_AGGREGATE_CRON = "5 0 * * *";
 // Todo hora — agrega o dia atual para manter leaderboard atualizado
 const HOURLY_AGGREGATE_CRON = "0 * * * *";
 
+// Roda todo hora e verifica quais guilds devem receber o relatório mensal agora
 export function scheduleMonthlyReport(client: Client): void {
   cron.schedule(
-    MONTHLY_CRON,
+    "0 * * * *",
     async () => {
-      logger.info("Iniciando relatório mensal...");
-
       for (const [, guild] of client.guilds.cache) {
         try {
-          const yesterday = new Date();
+          const config = await prisma.guildConfig.findUnique({ where: { guildId: guild.id } });
+          const timezone = config?.timezone ?? process.env.TIMEZONE ?? "America/Sao_Paulo";
+
+          const now = new Date();
+          const hour       = parseInt(now.toLocaleString("en-US", { timeZone: timezone, hour: "numeric", hour12: false }), 10);
+          const dayOfMonth = parseInt(now.toLocaleString("en-US", { timeZone: timezone, day: "numeric" }), 10);
+
+          const scheduledDay  = config?.monthlyReportDay  ?? 1;
+          const scheduledHour = config?.monthlyReportHour ?? 8;
+
+          if (dayOfMonth !== scheduledDay || hour !== scheduledHour) continue;
+
+          logger.info(`Iniciando relatório mensal para guild ${guild.id} (dia ${scheduledDay} às ${scheduledHour}:00)`);
+          const yesterday = new Date(now);
           yesterday.setDate(yesterday.getDate() - 1);
           await aggregateDaily(guild.id, yesterday);
-
           await runReport(guild, "monthly");
         } catch (error) {
           logger.error(`Erro no relatório mensal da guild ${guild.id}:`, error);
         }
       }
     },
-    { timezone: process.env.TIMEZONE ?? "America/Sao_Paulo" }
+    { timezone: "UTC" }
   );
 
-  logger.info("Relatório mensal agendado (dia 1 de cada mês às 08:00)");
+  logger.info("Relatório mensal agendado (verificação horária por guild)");
 }
 
 export function scheduleDailyAggregate(client: Client): void {

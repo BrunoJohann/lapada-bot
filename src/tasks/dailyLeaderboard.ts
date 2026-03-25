@@ -26,9 +26,9 @@ export function scheduleDailyLeaderboard(client: Client): void {
             where: { guildId: guild.id },
           });
 
-          // Só envia se a hora atual bate com o horário configurado (padrão: 23)
-          const scheduledHour = config?.dailyReportHour ?? 23;
-          if (hour !== scheduledHour) continue;
+          // Só envia se a hora atual está na lista de horários configurados (padrão: [23])
+          const scheduledHours = config?.dailyReportHours ?? [23];
+          if (!scheduledHours.includes(hour)) continue;
 
           if (!config?.reportChannelId) {
             logger.warn(`Guild ${guild.id}: canal de relatório não configurado, pulando ranking diário.`);
@@ -63,11 +63,11 @@ export function scheduleDailyLeaderboard(client: Client): void {
           });
 
           embed.setTitle("📅 Ranking do Dia — Semana Atual");
-          embed.setFooter({ text: `Ranking automático das ${scheduledHour}:00 · Discord Activity Bot` });
+          embed.setFooter({ text: `Ranking automático das ${hour}:00 · Discord Activity Bot` });
 
           await channel.send({ embeds: [embed] });
 
-          logger.info(`Ranking diário enviado para guild ${guild.id} (${scheduledHour}:00)`);
+          logger.info(`Ranking diário enviado para guild ${guild.id} (${hour}:00)`);
         } catch (error) {
           logger.error(`Erro no ranking diário da guild ${guild.id}:`, error);
         }

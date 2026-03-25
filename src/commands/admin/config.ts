@@ -119,11 +119,58 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("horario-report")
-      .setDescription("Define o horário do ranking diário automático")
+      .setDescription("Define os horários do ranking diário (suporta múltiplos)")
+      .addStringOption((opt) =>
+        opt
+          .setName("horas")
+          .setDescription("Hora(s) de 0–23 separadas por vírgula. Ex: 9 ou 9,21")
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("horario-semanal")
+      .setDescription("Define o dia e hora do relatório semanal automático")
+      .addIntegerOption((opt) =>
+        opt
+          .setName("dia")
+          .setDescription("Dia da semana")
+          .setRequired(true)
+          .addChoices(
+            { name: "Domingo",       value: 0 },
+            { name: "Segunda-feira", value: 1 },
+            { name: "Terça-feira",   value: 2 },
+            { name: "Quarta-feira",  value: 3 },
+            { name: "Quinta-feira",  value: 4 },
+            { name: "Sexta-feira",   value: 5 },
+            { name: "Sábado",        value: 6 },
+          )
+      )
       .addIntegerOption((opt) =>
         opt
           .setName("hora")
-          .setDescription("Hora do dia (0–23). Padrão: 23")
+          .setDescription("Hora do dia (0–23)")
+          .setMinValue(0)
+          .setMaxValue(23)
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("horario-mensal")
+      .setDescription("Define o dia e hora do relatório mensal automático")
+      .addIntegerOption((opt) =>
+        opt
+          .setName("dia")
+          .setDescription("Dia do mês (1–28)")
+          .setMinValue(1)
+          .setMaxValue(28)
+          .setRequired(true)
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName("hora")
+          .setDescription("Hora do dia (0–23)")
           .setMinValue(0)
           .setMaxValue(23)
           .setRequired(true)
@@ -178,9 +225,25 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     updateData = { monthlyRoleDurationDays: dias };
     confirmMsg = `Duração do cargo mensal definida para **${dias}** dias`;
   } else if (sub === "horario-report") {
+    const horasStr = interaction.options.getString("horas", true);
+    const horas = horasStr.split(",").map((h) => parseInt(h.trim(), 10)).filter((h) => !isNaN(h) && h >= 0 && h <= 23);
+    if (horas.length === 0) {
+      await interaction.editReply("❌ Formato inválido. Use números de 0–23 separados por vírgula. Ex: `9` ou `9,21`");
+      return;
+    }
+    updateData = { dailyReportHours: horas };
+    confirmMsg = `Ranking diário agendado para **${horas.map((h) => `${h}:00`).join(", ")}**`;
+  } else if (sub === "horario-semanal") {
+    const dia = interaction.options.getInteger("dia", true);
     const hora = interaction.options.getInteger("hora", true);
-    updateData = { dailyReportHour: hora };
-    confirmMsg = `Ranking diário agendado para **${hora}:00**`;
+    const dias = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+    updateData = { weeklyReportDay: dia, weeklyReportHour: hora };
+    confirmMsg = `Relatório semanal agendado para **${dias[dia]}** às **${hora}:00**`;
+  } else if (sub === "horario-mensal") {
+    const dia = interaction.options.getInteger("dia", true);
+    const hora = interaction.options.getInteger("hora", true);
+    updateData = { monthlyReportDay: dia, monthlyReportHour: hora };
+    confirmMsg = `Relatório mensal agendado para todo **dia ${dia}** às **${hora}:00**`;
   } else if (sub === "cargo-participante-adicionar") {
     const role = interaction.options.getRole("cargo", true);
     // Adiciona à array sem duplicatas

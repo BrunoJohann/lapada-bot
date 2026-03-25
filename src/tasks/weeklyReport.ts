@@ -2,32 +2,44 @@ import cron from "node-cron";
 import { Client } from "discord.js";
 import { runReport } from "../services/reportService";
 import { aggregateDaily } from "../services/metricsService";
+import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
 
-// Toda segunda-feira às 08:00 (America/Sao_Paulo)
-const WEEKLY_CRON = "0 8 * * 1";
+const DAY_NAMES = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
 
+// Roda todo hora e verifica quais guilds devem receber o relatório semanal agora
 export function scheduleWeeklyReport(client: Client): void {
   cron.schedule(
-    WEEKLY_CRON,
+    "0 * * * *",
     async () => {
-      logger.info("Iniciando relatório semanal...");
-
       for (const [, guild] of client.guilds.cache) {
         try {
-          // Garante que a agregação do dia anterior está completa
-          const yesterday = new Date();
+          const config = await prisma.guildConfig.findUnique({ where: { guildId: guild.id } });
+          const timezone = config?.timezone ?? process.env.TIMEZONE ?? "America/Sao_Paulo";
+
+          const now = new Date();
+          const hour = parseInt(now.toLocaleString("en-US", { timeZone: timezone, hour: "numeric", hour12: false }), 10);
+          const dayShort = now.toLocaleString("en-US", { timeZone: timezone, weekday: "short" });
+          const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+          const dayOfWeek = dayMap[dayShort] ?? 1;
+
+          const scheduledDay  = config?.weeklyReportDay  ?? 1;
+          const scheduledHour = config?.weeklyReportHour ?? 8;
+
+          if (dayOfWeek !== scheduledDay || hour !== scheduledHour) continue;
+
+          logger.info(`Iniciando relatório semanal para guild ${guild.id} (${DAY_NAMES[scheduledDay]} ${scheduledHour}:00)`);
+          const yesterday = new Date(now);
           yesterday.setDate(yesterday.getDate() - 1);
           await aggregateDaily(guild.id, yesterday);
-
           await runReport(guild, "weekly");
         } catch (error) {
           logger.error(`Erro no relatório semanal da guild ${guild.id}:`, error);
         }
       }
     },
-    { timezone: process.env.TIMEZONE ?? "America/Sao_Paulo" }
+    { timezone: "UTC" }
   );
 
-  logger.info("Relatório semanal agendado (segunda-feira 08:00)");
+  logger.info("Relatório semanal agendado (verificação horária por guild)");
 }
