@@ -3,10 +3,13 @@ import path from "path";
 import fs from "fs";
 import { Events, ActivityType } from "discord.js";
 import { createClient } from "./client";
-import { logger } from "./utils/logger";
+import { logger, registerProcessHandlers } from "./utils/logger";
+import { checkDbConnection } from "./database/prisma";
 import { scheduleWeeklyReport } from "./tasks/weeklyReport";
 import { scheduleMonthlyReport, scheduleDailyAggregate } from "./tasks/monthlyReport";
 import { scheduleDailyLeaderboard } from "./tasks/dailyLeaderboard";
+
+registerProcessHandlers();
 
 const client = createClient();
 
@@ -70,7 +73,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     await command.execute(interaction);
   } catch (error) {
-    logger.error(`Erro ao executar /${interaction.commandName}:`, error);
+    logger.error(`Erro ao executar /${interaction.commandName} [guild:${interaction.guildId} user:${interaction.user.id}]`, error);
     const errorMsg = { content: "Ocorreu um erro ao executar este comando.", ephemeral: true };
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(errorMsg);
@@ -97,6 +100,7 @@ async function main(): Promise<void> {
   const token = process.env.DISCORD_TOKEN;
   if (!token) throw new Error("DISCORD_TOKEN não definido no .env");
 
+  await checkDbConnection();
   await loadEvents();
   await loadCommands();
   await client.login(token);

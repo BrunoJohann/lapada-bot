@@ -12,8 +12,10 @@ export function getRedis(): Redis | null {
       retryStrategy: (times) => Math.min(times * 100, 3000),
     });
 
-    redis.on("error", (err) => logger.error("Redis error:", err));
-    redis.on("connect", () => logger.info("Redis connected"));
+    redis.on("error",        (err) => logger.error("[Redis] Erro de conexão", err));
+    redis.on("connect",      ()    => logger.info("[Redis] Conectado"));
+    redis.on("reconnecting", ()    => logger.warn("[Redis] Reconectando..."));
+    redis.on("close",        ()    => logger.warn("[Redis] Conexão encerrada"));
   }
 
   return redis;
