@@ -131,7 +131,7 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
           },
           {
             name: "🛠️ Forçar manualmente",
-            value: "Administradores podem acionar a qualquer momento:\n`/report semanal` ou `/report mensal`",
+            value: "Qualquer membro pode acionar a qualquer momento:\n`/lapada-report semanal` ou `/lapada-report mensal`",
           }
         );
 
@@ -148,6 +148,9 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
               "`/lapada-stats periodo:Mês atual` — Stats do mês",
               "`/lapada-leaderboard` — Ranking semanal do servidor",
               "`/lapada-leaderboard periodo:Mês atual` — Ranking mensal",
+              "`/lapada-report semanal` — Gera relatório semanal agora",
+              "`/lapada-report mensal` — Gera relatório mensal agora",
+              "`/lapada-report agregar` — Força agregação de métricas",
               "`/help` ou `/lapada-help` — Esta mensagem de ajuda",
             ].join("\n"),
           },
@@ -171,9 +174,6 @@ function buildHelpEmbed(topico: string): EmbedBuilder {
               "`/lapada-config streamer true multiplicador:1.5` — Habilita com multiplicador customizado",
               "`/lapada-config cargo-participante-adicionar @Cargo` — Cargo que participa das métricas",
               "`/lapada-config cargo-participante-remover @Cargo` — Remove cargo da lista",
-              "`/lapada-report semanal` — Gera relatório semanal agora",
-              "`/lapada-report mensal` — Gera relatório mensal agora",
-              "`/lapada-report agregar` — Força agregação de métricas",
             ].join("\n"),
           }
         )

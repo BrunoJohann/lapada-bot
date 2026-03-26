@@ -162,6 +162,9 @@ Arraste o **cargo do bot para acima** do cargo que ele vai atribuir.
 | `/lapada-stats usuario:@Alguém` | Veja as métricas de outro membro |
 | `/lapada-leaderboard` | Ranking semanal do servidor |
 | `/lapada-leaderboard periodo:Mês atual` | Ranking mensal |
+| `/lapada-report semanal` | Gera o relatório semanal agora |
+| `/lapada-report mensal` | Gera o relatório mensal agora |
+| `/lapada-report agregar` | Força atualização das métricas |
 | `/help` ou `/lapada-help` | Ajuda e tutorial de configuração |
 
 ### 🔧 Para administradores
@@ -185,9 +188,6 @@ Arraste o **cargo do bot para acima** do cargo que ele vai atribuir.
 | `/lapada-config streamer true multiplicador:1.5` | Habilita stream com multiplicador customizado |
 | `/lapada-config cargo-participante-adicionar @Cargo` | Só este cargo participa das métricas |
 | `/lapada-config cargo-participante-remover @Cargo` | Remove cargo da lista de participantes |
-| `/lapada-report semanal` | Gera o relatório semanal agora |
-| `/lapada-report mensal` | Gera o relatório mensal agora |
-| `/lapada-report agregar` | Força atualização das métricas |
 
 ---
 
