@@ -216,7 +216,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply();
 
   const sub = interaction.options.getSubcommand();
   const guildId = interaction.guildId;
