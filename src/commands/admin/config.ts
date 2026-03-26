@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   PermissionFlagsBits,
+  TextChannel,
 } from "discord.js";
 import { prisma } from "../../database/prisma";
 import { invalidateGuildConfig } from "../../utils/guildConfig";
@@ -208,6 +209,17 @@ export const data = new SlashCommandBuilder()
           .setRequired(false)
       )
   )
+  .addSubcommand((sub) =>
+    sub
+      .setName("mensagem")
+      .setDescription("Envia uma mensagem pública no canal como se fosse uma confirmação do bot")
+      .addStringOption((opt) =>
+        opt
+          .setName("texto")
+          .setDescription("Texto da mensagem")
+          .setRequired(true)
+      )
+  )
 ;
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -302,6 +314,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     });
     await invalidateGuildConfig(guildId);
     await interaction.editReply(`✅ <@&${role.id}> adicionado às métricas.\n> Agora apenas membros com este cargo (e outros na lista) terão atividade rastreada.`);
+    return;
+  } else if (sub === "mensagem") {
+    const texto = interaction.options.getString("texto", true);
+    await interaction.editReply({ content: "✅ Mensagem enviada." });
+    await (interaction.channel as TextChannel)?.send(`✅ ${texto}`);
     return;
   } else if (sub === "cargo-participante-remover") {
     const role = interaction.options.getRole("cargo", true);
