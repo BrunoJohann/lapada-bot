@@ -23,6 +23,10 @@ export async function execute(oldState: VoiceState, newState: VoiceState): Promi
   const streamStarted = !oldState.streaming && newState.streaming;
   const streamStopped =  oldState.streaming && !newState.streaming;
 
+  // Deaf: selfDeaf muda enquanto está em canal
+  const wentDeaf  = !!oldState.channelId && !oldState.selfDeaf && !!newState.selfDeaf;
+  const undeafed  = !!oldState.channelId &&  !!oldState.selfDeaf && !newState.selfDeaf;
+
   try {
     await prisma.user.upsert({
       where: { id: userId },
@@ -30,21 +34,24 @@ export async function execute(oldState: VoiceState, newState: VoiceState): Promi
       create: { id: userId, guildId, username: member.user.username, displayName: member.displayName },
     });
 
-    // ── Voz ──────────────────────────────────────────────────────────────
+    // ── Entrou em canal ───────────────────────────────────────────────────
     if (joinedChannel) {
       const channel = newState.channel;
       const nonBots = channel?.members.filter((m) => !m.user.bot) ?? new Map();
       const memberCount = nonBots.size;
 
       if (memberCount >= 2) {
-        // Abre sessão para quem acabou de entrar
-        await prisma.voiceSession.create({
-          data: { userId, guildId, channelId: newState.channelId!, joinedAt: new Date() },
-        });
+        // Abre sessão para quem acabou de entrar (somente se não estiver deaf)
+        if (!newState.selfDeaf) {
+          await prisma.voiceSession.create({
+            data: { userId, guildId, channelId: newState.channelId!, joinedAt: new Date() },
+          });
+        }
 
-        // Abre sessão para quem estava sozinho e agora tem companhia
-        for (const [otherId] of nonBots) {
+        // Abre sessão para quem estava sozinho e agora tem companhia (se não estiver deaf)
+        for (const [otherId, otherMember] of nonBots) {
           if (otherId === userId) continue;
+          if (otherMember.voice.selfDeaf) continue; // deaf não pontua em voz
           const existing = await prisma.voiceSession.findFirst({
             where: { userId: otherId, guildId, leftAt: null },
           });
@@ -72,16 +79,15 @@ export async function execute(oldState: VoiceState, newState: VoiceState): Promi
       }
       // se entrou sozinho: não abre nenhuma sessão
 
+    // ── Saiu ou trocou de canal ───────────────────────────────────────────
     } else if (leftChannel || switchedChannel) {
-      // Fecha sessão de voz de quem saiu/trocou
       await closeOpenVoice(userId, guildId);
 
-      // Fecha sessão de stream de quem saiu
       if (leftChannel) {
         await closeOpenStream(userId, guildId);
       }
 
-      // Verifica se quem ficou no canal antigo está sozinho agora
+      // Verifica se quem ficou no canal antigo ficou sozinho
       const oldChannel = oldState.channel;
       if (oldChannel) {
         const remaining = oldChannel.members.filter((m) => !m.user.bot);
@@ -95,11 +101,29 @@ export async function execute(oldState: VoiceState, newState: VoiceState): Promi
         }
       }
 
-      // Se trocou de canal, abre sessão no novo apenas se ≥2 pessoas
+      // Trocou de canal: abre sessão no novo apenas se ≥2 pessoas e não estiver deaf
       if (switchedChannel && newState.channelId) {
-        const newChannel = newState.channel;
-        const nonBots = newChannel?.members.filter((m) => !m.user.bot).size ?? 0;
-        if (nonBots >= 2) {
+        const nonBots = newState.channel?.members.filter((m) => !m.user.bot).size ?? 0;
+        if (nonBots >= 2 && !newState.selfDeaf) {
+          await prisma.voiceSession.create({
+            data: { userId, guildId, channelId: newState.channelId, joinedAt: new Date() },
+          });
+        }
+      }
+
+    // ── Foi deafado: fecha voz, mantém stream ────────────────────────────
+    } else if (wentDeaf) {
+      await closeOpenVoice(userId, guildId);
+      // StreamSession continua aberta — deaf + streaming ainda pontua stream
+
+    // ── Removeu deaf: abre voz se ≥2 pessoas ────────────────────────────
+    } else if (undeafed && newState.channelId) {
+      const nonBots = newState.channel?.members.filter((m) => !m.user.bot).size ?? 0;
+      if (nonBots >= 2) {
+        const existing = await prisma.voiceSession.findFirst({
+          where: { userId, guildId, leftAt: null },
+        });
+        if (!existing) {
           await prisma.voiceSession.create({
             data: { userId, guildId, channelId: newState.channelId, joinedAt: new Date() },
           });
