@@ -75,7 +75,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   }
 
   const periodLabel = getPeriodLabel(new Date(), period);
-  const avatarUrl = member?.user.displayAvatarURL() ?? undefined;
+  const resolvedUser = !userInput ? interaction.user : member?.user;
+  const avatarUrl = resolvedUser?.displayAvatarURL() ?? undefined;
 
   const embed = buildStatsEmbed({
     username: stats.displayName ?? stats.username,
