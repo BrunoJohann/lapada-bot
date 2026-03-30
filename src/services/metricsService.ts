@@ -49,14 +49,34 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
       prisma.messageActivity.count({
         where: { userId: user.id, guildId, createdAt: { gte: dayStart, lt: dayEnd } },
       }),
+      // Inclui sessões que cruzam a fronteira do dia UTC:
+      // (1) começou e terminou dentro do dia
+      // (2) começou antes, terminou dentro do dia
+      // (3) começou antes e ainda está aberta (pode estar cruzando a meia-noite)
       prisma.voiceSession.findMany({
-        where: { userId: user.id, guildId, joinedAt: { gte: dayStart, lt: dayEnd } },
-        select: { durationMs: true, leftAt: true, joinedAt: true },
+        where: {
+          userId: user.id,
+          guildId,
+          OR: [
+            { joinedAt: { gte: dayStart, lt: dayEnd } },
+            { joinedAt: { lt: dayStart }, leftAt: { gte: dayStart } },
+            { joinedAt: { lt: dayStart }, leftAt: null },
+          ],
+        },
+        select: { leftAt: true, joinedAt: true },
       }),
       streamEnabled
         ? prisma.streamSession.findMany({
-            where: { userId: user.id, guildId, startedAt: { gte: dayStart, lt: dayEnd } },
-            select: { durationMs: true, endedAt: true, startedAt: true },
+            where: {
+              userId: user.id,
+              guildId,
+              OR: [
+                { startedAt: { gte: dayStart, lt: dayEnd } },
+                { startedAt: { lt: dayStart }, endedAt: { gte: dayStart } },
+                { startedAt: { lt: dayStart }, endedAt: null },
+              ],
+            },
+            select: { endedAt: true, startedAt: true },
           })
         : Promise.resolve([]),
       prisma.reactionActivity.count({
@@ -68,20 +88,26 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
 
     const now = Date.now();
 
+    // Calcula duração apenas dentro dos limites do dia UTC (clamp)
+    // Isso garante que sessões que cruzam a meia-noite UTC sejam contadas corretamente
     const voiceMinutes = Math.floor(
       voiceSessions.reduce((sum, s) => {
-        if (s.durationMs !== null) return sum + s.durationMs;
-        if (s.leftAt === null) return sum + (now - s.joinedAt.getTime());
-        return sum;
+        const start = Math.max(s.joinedAt.getTime(), dayStart.getTime());
+        const end   = s.leftAt
+          ? Math.min(s.leftAt.getTime(), dayEnd.getTime())
+          : Math.min(now, dayEnd.getTime());
+        return sum + Math.max(0, end - start);
       }, 0) / 60000
     );
 
     const streamMinutes = Math.floor(
-      (streamSessions as Array<{ durationMs: number | null; endedAt: Date | null; startedAt: Date }>)
+      (streamSessions as Array<{ endedAt: Date | null; startedAt: Date }>)
         .reduce((sum, s) => {
-          if (s.durationMs !== null) return sum + s.durationMs;
-          if (s.endedAt === null) return sum + (now - s.startedAt.getTime());
-          return sum;
+          const start = Math.max(s.startedAt.getTime(), dayStart.getTime());
+          const end   = s.endedAt
+            ? Math.min(s.endedAt.getTime(), dayEnd.getTime())
+            : Math.min(now, dayEnd.getTime());
+          return sum + Math.max(0, end - start);
         }, 0) / 60000
     );
 

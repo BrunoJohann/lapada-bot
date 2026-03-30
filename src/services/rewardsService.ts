@@ -30,9 +30,10 @@ export async function processRewards(
     return { assigned: [], removed: [], topUsers: [], roleName: "N/A" };
   }
 
-  const role = guild.roles.cache.get(roleId);
+  // Tenta cache primeiro; se não estiver, busca via API (evita falha por cache não populado)
+  const role = guild.roles.cache.get(roleId) ?? (await guild.roles.fetch(roleId)) ?? undefined;
   if (!role) {
-    logger.warn(`Guild ${guild.id}: cargo ${roleId} não encontrado.`);
+    logger.warn(`Guild ${guild.id}: cargo ${roleId} não encontrado (nem em cache, nem via API).`);
     return { assigned: [], removed: [], topUsers: [], roleName: "N/A" };
   }
 

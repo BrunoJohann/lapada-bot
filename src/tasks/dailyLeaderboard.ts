@@ -12,19 +12,20 @@ export function scheduleDailyLeaderboard(client: Client): void {
   cron.schedule(
     HOURLY_CHECK_CRON,
     async () => {
-      const timezone = process.env.TIMEZONE ?? "America/Sao_Paulo";
-      const currentHour = new Date().toLocaleString("en-US", {
-        timeZone: timezone,
-        hour: "numeric",
-        hour12: false,
-      });
-      const hour = parseInt(currentHour, 10);
-
       for (const [, guild] of client.guilds.cache) {
         try {
           const config = await prisma.guildConfig.findUnique({
             where: { guildId: guild.id },
           });
+
+          // Usa timezone por guild (igual ao weekly/monthly)
+          const timezone = config?.timezone ?? process.env.TIMEZONE ?? "America/Sao_Paulo";
+          const currentHour = new Date().toLocaleString("en-US", {
+            timeZone: timezone,
+            hour: "numeric",
+            hour12: false,
+          });
+          const hour = parseInt(currentHour, 10);
 
           // Só envia se a hora atual está na lista de horários configurados (padrão: [23])
           const scheduledHours = config?.dailyReportHours ?? [23];
