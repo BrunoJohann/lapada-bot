@@ -6,9 +6,11 @@ import {
 } from "discord.js";
 import { prisma } from "../../database/prisma";
 import { invalidateGuildConfig } from "../../utils/guildConfig";
-import { aggregateDaily } from "../../services/metricsService";
+import { aggregateDaily, resolveHistoricalRange } from "../../services/metricsService";
 import { processRewards } from "../../services/rewardsService";
 import { Command } from "../../client";
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 export const data = new SlashCommandBuilder()
   .setName("lapada-config")
@@ -225,53 +227,72 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("atribuir-cargos")
-      .setDescription("Força a atribuição de cargos de recompensa agora, sem esperar o relatório automático")
+      .setDescription("Força a atribuição de cargos de recompensa, com opção de período histórico")
       .addStringOption((opt) =>
         opt
           .setName("periodo")
           .setDescription("Qual período processar")
           .setRequired(true)
           .addChoices(
-            { name: "Semanal",        value: "weekly" },
-            { name: "Mensal",         value: "monthly" },
-            { name: "Ambos",          value: "both" },
+            { name: "Semanal", value: "weekly" },
+            { name: "Mensal",  value: "monthly" },
+            { name: "Ambos",   value: "both" },
           )
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("mes").setDescription("Mês histórico (1–12)").setMinValue(1).setMaxValue(12)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("ano").setDescription(`Ano histórico (padrão: ${CURRENT_YEAR})`).setMinValue(2024).setMaxValue(2030)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("semana").setDescription("Semana do mês (1–5) — requer 'mes'").setMinValue(1).setMaxValue(5)
       )
   )
   .addSubcommand((sub) =>
     sub
       .setName("adicionar-pontos")
-      .setDescription("Adiciona pontos manualmente a um usuário")
+      .setDescription("Adiciona pontos manualmente a um usuário (em um período específico ou hoje)")
       .addUserOption((opt) =>
         opt.setName("usuario").setDescription("Usuário que receberá os pontos").setRequired(true)
       )
       .addNumberOption((opt) =>
-        opt
-          .setName("pontos")
-          .setDescription("Quantidade de pontos a adicionar (ex: 50)")
-          .setMinValue(0.1)
-          .setRequired(true)
+        opt.setName("pontos").setDescription("Quantidade de pontos a adicionar (ex: 50)").setMinValue(0.1).setRequired(true)
       )
       .addStringOption((opt) =>
         opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("mes").setDescription("Mês do ajuste (1–12, padrão: mês atual)").setMinValue(1).setMaxValue(12)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("ano").setDescription(`Ano do ajuste (padrão: ${CURRENT_YEAR})`).setMinValue(2024).setMaxValue(2030)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("semana").setDescription("Semana do mês (1–5) — aplica no 1º dia da semana").setMinValue(1).setMaxValue(5)
       )
   )
   .addSubcommand((sub) =>
     sub
       .setName("remover-pontos")
-      .setDescription("Remove pontos manualmente de um usuário")
+      .setDescription("Remove pontos manualmente de um usuário (em um período específico ou hoje)")
       .addUserOption((opt) =>
         opt.setName("usuario").setDescription("Usuário que perderá os pontos").setRequired(true)
       )
       .addNumberOption((opt) =>
-        opt
-          .setName("pontos")
-          .setDescription("Quantidade de pontos a remover (ex: 50)")
-          .setMinValue(0.1)
-          .setRequired(true)
+        opt.setName("pontos").setDescription("Quantidade de pontos a remover (ex: 50)").setMinValue(0.1).setRequired(true)
       )
       .addStringOption((opt) =>
         opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("mes").setDescription("Mês do ajuste (1–12, padrão: mês atual)").setMinValue(1).setMaxValue(12)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("ano").setDescription(`Ano do ajuste (padrão: ${CURRENT_YEAR})`).setMinValue(2024).setMaxValue(2030)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("semana").setDescription("Semana do mês (1–5) — aplica no 1º dia da semana").setMinValue(1).setMaxValue(5)
       )
   )
 ;
@@ -376,19 +397,30 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   } else if (sub === "atribuir-cargos") {
     const periodo = interaction.options.getString("periodo", true) as "weekly" | "monthly" | "both";
-    const guild = interaction.guild!;
+    const mes     = interaction.options.getInteger("mes");
+    const ano     = interaction.options.getInteger("ano");
+    const semana  = interaction.options.getInteger("semana");
+    const guild   = interaction.guild!;
 
-    await interaction.editReply("⏳ Agregando dados e processando cargos...");
+    const historical = resolveHistoricalRange(semana, mes, ano);
 
-    // Agrega o dia atual para garantir dados frescos
-    await aggregateDaily(guildId, new Date());
+    await interaction.editReply(
+      historical
+        ? `⏳ Processando cargos com dados de **${historical.label}**...`
+        : "⏳ Agregando dados frescos e processando cargos..."
+    );
+
+    // Só agrega se for período corrente (histórico já está no banco)
+    if (!historical) {
+      await aggregateDaily(guildId, new Date());
+    }
 
     const periods: Array<"weekly" | "monthly"> = periodo === "both" ? ["weekly", "monthly"] : [periodo];
     const lines: string[] = [];
 
     for (const p of periods) {
-      const result = await processRewards(guild, p);
-      const label = p === "weekly" ? "Semanal" : "Mensal";
+      const result = await processRewards(guild, p, historical ?? undefined);
+      const label  = p === "weekly" ? "Semanal" : "Mensal";
 
       if (result.roleName === "N/A") {
         lines.push(`⚠️ **${label}**: cargo não configurado. Use \`/lapada-config cargo-${p === "weekly" ? "semanal" : "mensal"}\` primeiro.`);
@@ -397,11 +429,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
       const assignedList = result.assigned.length > 0 ? result.assigned.join(", ") : "nenhum";
       const removedList  = result.removed.length  > 0 ? result.removed.join(", ")  : "nenhum";
+      const failedLines  = result.failed.map((f) => `⚠️ ${f.username}: ${f.reason}`).join("\n");
 
       lines.push(
-        `✅ **${label}** — cargo: \`${result.roleName}\`\n` +
+        `${result.failed.length > 0 ? "⚠️" : "✅"} **${label}** — cargo: \`${result.roleName}\`` +
+        (historical ? ` · período: ${historical.label}` : "") + `\n` +
         `> 🏆 Atribuídos: ${assignedList}\n` +
-        `> ❌ Removidos: ${removedList}`
+        `> ❌ Removidos: ${removedList}` +
+        (failedLines ? `\n> 🚫 Falhas:\n${failedLines.split("\n").map((l) => `> ${l}`).join("\n")}` : "")
       );
     }
 
@@ -411,10 +446,24 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const targetUser = interaction.options.getUser("usuario", true);
     const pontos     = interaction.options.getNumber("pontos", true);
     const motivo     = interaction.options.getString("motivo") ?? "Ajuste manual por admin";
+    const mes        = interaction.options.getInteger("mes");
+    const ano        = interaction.options.getInteger("ano");
+    const semana     = interaction.options.getInteger("semana");
     const delta      = sub === "adicionar-pontos" ? pontos : -pontos;
 
-    const hoje = new Date();
-    hoje.setUTCHours(0, 0, 0, 0);
+    // Determina a data alvo: primeiro dia do período selecionado ou hoje
+    let targetDate: Date;
+    let periodoLabel: string;
+
+    const historical = resolveHistoricalRange(semana, mes, ano);
+    if (historical) {
+      targetDate   = historical.start; // primeiro dia do período
+      periodoLabel = historical.label;
+    } else {
+      targetDate = new Date();
+      targetDate.setUTCHours(0, 0, 0, 0);
+      periodoLabel = "hoje";
+    }
 
     // Garante que o usuário existe no banco
     await prisma.user.upsert({
@@ -423,19 +472,19 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       create: { id: targetUser.id, guildId, username: targetUser.username, displayName: targetUser.displayName },
     });
 
-    // Busca o registro do dia (ou cria zerado) e incrementa manualPoints
+    // Busca o registro do dia alvo (ou cria zerado) e incrementa manualPoints
     const existing = await prisma.dailyAggregate.findUnique({
-      where: { userId_guildId_date: { userId: targetUser.id, guildId, date: hoje } },
+      where: { userId_guildId_date: { userId: targetUser.id, guildId, date: targetDate } },
     });
 
     const newManual = (existing?.manualPoints ?? 0) + delta;
     const newScore  = (existing?.score ?? 0) + delta;
 
     await prisma.dailyAggregate.upsert({
-      where: { userId_guildId_date: { userId: targetUser.id, guildId, date: hoje } },
+      where: { userId_guildId_date: { userId: targetUser.id, guildId, date: targetDate } },
       update: { manualPoints: newManual, score: newScore },
       create: {
-        userId: targetUser.id, guildId, date: hoje,
+        userId: targetUser.id, guildId, date: targetDate,
         messageCount: 0, voiceMinutes: 0, streamMinutes: 0, reactionsCount: 0,
         score: delta, manualPoints: delta,
       },
@@ -445,8 +494,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const emoji = delta > 0 ? "➕" : "➖";
     await interaction.editReply(
       `${emoji} **${sinal}${pontos} pontos** para <@${targetUser.id}>\n` +
+      `> Período: ${periodoLabel}\n` +
       `> Motivo: ${motivo}\n` +
-      `> Total manual hoje: **${sinal}${newManual.toFixed(1)} pts**`
+      `> Total manual no período: **${newManual >= 0 ? "+" : ""}${newManual.toFixed(1)} pts**`
     );
     return;
   } else if (sub === "cargo-participante-remover") {
