@@ -6,6 +6,8 @@ import {
 } from "discord.js";
 import { prisma } from "../../database/prisma";
 import { invalidateGuildConfig } from "../../utils/guildConfig";
+import { aggregateDaily } from "../../services/metricsService";
+import { processRewards } from "../../services/rewardsService";
 import { Command } from "../../client";
 
 export const data = new SlashCommandBuilder()
@@ -220,6 +222,22 @@ export const data = new SlashCommandBuilder()
           .setRequired(true)
       )
   )
+  .addSubcommand((sub) =>
+    sub
+      .setName("atribuir-cargos")
+      .setDescription("Força a atribuição de cargos de recompensa agora, sem esperar o relatório automático")
+      .addStringOption((opt) =>
+        opt
+          .setName("periodo")
+          .setDescription("Qual período processar")
+          .setRequired(true)
+          .addChoices(
+            { name: "Semanal",        value: "weekly" },
+            { name: "Mensal",         value: "monthly" },
+            { name: "Ambos",          value: "both" },
+          )
+      )
+  )
 ;
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -319,6 +337,39 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const texto = interaction.options.getString("texto", true);
     await interaction.editReply({ content: "✅ Mensagem enviada." });
     await (interaction.channel as TextChannel)?.send(`✅ ${texto}`);
+    return;
+  } else if (sub === "atribuir-cargos") {
+    const periodo = interaction.options.getString("periodo", true) as "weekly" | "monthly" | "both";
+    const guild = interaction.guild!;
+
+    await interaction.editReply("⏳ Agregando dados e processando cargos...");
+
+    // Agrega o dia atual para garantir dados frescos
+    await aggregateDaily(guildId, new Date());
+
+    const periods: Array<"weekly" | "monthly"> = periodo === "both" ? ["weekly", "monthly"] : [periodo];
+    const lines: string[] = [];
+
+    for (const p of periods) {
+      const result = await processRewards(guild, p);
+      const label = p === "weekly" ? "Semanal" : "Mensal";
+
+      if (result.roleName === "N/A") {
+        lines.push(`⚠️ **${label}**: cargo não configurado. Use \`/lapada-config cargo-${p === "weekly" ? "semanal" : "mensal"}\` primeiro.`);
+        continue;
+      }
+
+      const assignedList = result.assigned.length > 0 ? result.assigned.join(", ") : "nenhum";
+      const removedList  = result.removed.length  > 0 ? result.removed.join(", ")  : "nenhum";
+
+      lines.push(
+        `✅ **${label}** — cargo: \`${result.roleName}\`\n` +
+        `> 🏆 Atribuídos: ${assignedList}\n` +
+        `> ❌ Removidos: ${removedList}`
+      );
+    }
+
+    await interaction.editReply(lines.join("\n\n"));
     return;
   } else if (sub === "cargo-participante-remover") {
     const role = interaction.options.getRole("cargo", true);
