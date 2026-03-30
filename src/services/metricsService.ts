@@ -251,3 +251,118 @@ export function getPeriodLabel(date: Date, period: "weekly" | "monthly"): string
 function fmtDate(d: Date): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
+
+// ── Histórico ──────────────────────────────────────────────────────────────
+
+export interface HistoricalRange {
+  start: Date;
+  end: Date;
+  label: string;
+}
+
+/**
+ * Resolve um intervalo histórico a partir de semana/mês/ano.
+ * - semana (1-5): semana do mês (dias 1-7, 8-14, 15-21, 22-28, 29-fim)
+ * - mes (1-12): mês do ano
+ * - ano: ano com 4 dígitos (padrão: ano atual)
+ *
+ * Retorna null quando nenhum parâmetro histórico foi fornecido.
+ */
+export function resolveHistoricalRange(
+  semana: number | null,
+  mes: number | null,
+  ano: number | null
+): HistoricalRange | null {
+  if (!mes && !semana) return null;
+
+  const now = new Date();
+  const year  = ano  ?? now.getUTCFullYear();
+  const month = (mes ?? (now.getUTCMonth() + 1)) - 1; // 0-indexed para Date.UTC
+
+  if (semana !== null) {
+    const dayStart = (semana - 1) * 7 + 1;
+    const start = new Date(Date.UTC(year, month, dayStart));
+    const rawEnd = new Date(Date.UTC(year, month, dayStart + 7));
+    const endOfMonth = new Date(Date.UTC(year, month + 1, 1));
+    const end = rawEnd > endOfMonth ? endOfMonth : rawEnd;
+
+    // Último dia da semana para exibição (end exclusive → -1 dia)
+    const displayEnd = new Date(end.getTime() - 86_400_000);
+    const label = `Semana ${semana} — ${fmtDate(start)} a ${fmtDate(displayEnd)}/${year}`;
+    return { start, end, label };
+  } else {
+    const start = new Date(Date.UTC(year, month, 1));
+    const end   = new Date(Date.UTC(year, month + 1, 1));
+    const label = start.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    return { start, end, label };
+  }
+}
+
+export async function getLeaderboardForRange(
+  guildId: string,
+  start: Date,
+  end: Date,
+  limit: number = 10
+): Promise<UserScore[]> {
+  const aggregates = await prisma.dailyAggregate.groupBy({
+    by: ["userId"],
+    where: { guildId, date: { gte: start, lt: end } },
+    _sum: { messageCount: true, voiceMinutes: true, streamMinutes: true, reactionsCount: true, score: true },
+    orderBy: { _sum: { score: "desc" } },
+    take: limit,
+  });
+
+  const userIds = aggregates.map((a) => a.userId);
+  const users   = await prisma.user.findMany({ where: { id: { in: userIds } } });
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  return aggregates.map((agg, index) => {
+    const user = userMap.get(agg.userId);
+    return {
+      userId:        agg.userId,
+      username:      user?.username      ?? "Usuário Desconhecido",
+      displayName:   user?.displayName   ?? null,
+      messageCount:  agg._sum.messageCount  ?? 0,
+      voiceMinutes:  agg._sum.voiceMinutes  ?? 0,
+      streamMinutes: agg._sum.streamMinutes ?? 0,
+      reactionsCount:agg._sum.reactionsCount ?? 0,
+      score:         agg._sum.score         ?? 0,
+      rank:          index + 1,
+    };
+  });
+}
+
+export async function getUserStatsForRange(
+  userId: string,
+  guildId: string,
+  start: Date,
+  end: Date
+): Promise<UserScore | null> {
+  const agg = await prisma.dailyAggregate.aggregate({
+    where: { userId, guildId, date: { gte: start, lt: end } },
+    _sum: { messageCount: true, voiceMinutes: true, streamMinutes: true, reactionsCount: true, score: true },
+  });
+
+  if (!agg._sum.score) return null;
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+
+  const betterUsers = await prisma.dailyAggregate.groupBy({
+    by: ["userId"],
+    where: { guildId, date: { gte: start, lt: end } },
+    _sum: { score: true },
+    having: { score: { _sum: { gt: agg._sum.score ?? 0 } } },
+  });
+
+  return {
+    userId,
+    username:      user?.username    ?? "Desconhecido",
+    displayName:   user?.displayName ?? null,
+    messageCount:  agg._sum.messageCount  ?? 0,
+    voiceMinutes:  agg._sum.voiceMinutes  ?? 0,
+    streamMinutes: agg._sum.streamMinutes ?? 0,
+    reactionsCount:agg._sum.reactionsCount ?? 0,
+    score:         agg._sum.score         ?? 0,
+    rank:          betterUsers.length + 1,
+  };
+}
