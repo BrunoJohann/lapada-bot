@@ -262,9 +262,15 @@ export interface HistoricalRange {
 
 /**
  * Resolve um intervalo histórico a partir de semana/mês/ano.
- * - semana (1-5): semana do mês (dias 1-7, 8-14, 15-21, 22-28, 29-fim)
- * - mes (1-12): mês do ano
- * - ano: ano com 4 dígitos (padrão: ano atual)
+ *
+ * Para semanas: usa o mesmo sistema ISO do bot (segunda→domingo).
+ *   A âncora é a primeira segunda-feira do mês.
+ *   Semana 1 = primeira segunda-feira até o domingo seguinte.
+ *   Semana 2 = segunda segunda-feira até o domingo seguinte. Etc.
+ *   Dias anteriores à primeira segunda-feira pertencem à última semana
+ *   do mês anterior (ex: dia 1 domingo → consulte o mês anterior).
+ *
+ * Para meses: primeiro ao último dia do mês.
  *
  * Retorna null quando nenhum parâmetro histórico foi fornecido.
  */
@@ -280,15 +286,20 @@ export function resolveHistoricalRange(
   const month = (mes ?? (now.getUTCMonth() + 1)) - 1; // 0-indexed para Date.UTC
 
   if (semana !== null) {
-    const dayStart = (semana - 1) * 7 + 1;
-    const start = new Date(Date.UTC(year, month, dayStart));
-    const rawEnd = new Date(Date.UTC(year, month, dayStart + 7));
-    const endOfMonth = new Date(Date.UTC(year, month + 1, 1));
-    const end = rawEnd > endOfMonth ? endOfMonth : rawEnd;
+    // Encontra a primeira segunda-feira do mês (alinha com getPeriodStart "weekly")
+    const firstOfMonth   = new Date(Date.UTC(year, month, 1));
+    const firstDayOfWeek = firstOfMonth.getUTCDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
+    // Dias até a próxima segunda: 0 se já for segunda, 1 se for domingo, etc.
+    const daysToFirstMonday = firstDayOfWeek === 1 ? 0 : firstDayOfWeek === 0 ? 1 : 8 - firstDayOfWeek;
+    const firstMondayDay    = 1 + daysToFirstMonday;
 
-    // Último dia da semana para exibição (end exclusive → -1 dia)
+    // Semana N começa em firstMonday + (N-1) * 7 dias
+    const weekStartDay = firstMondayDay + (semana - 1) * 7;
+    const start = new Date(Date.UTC(year, month, weekStartDay));       // pode transbordar para mês seguinte
+    const end   = new Date(Date.UTC(year, month, weekStartDay + 7));   // exclusive
+
     const displayEnd = new Date(end.getTime() - 86_400_000);
-    const label = `Semana ${semana} — ${fmtDate(start)} a ${fmtDate(displayEnd)}/${year}`;
+    const label = `Semana ${semana} — ${fmtDate(start)} a ${fmtDate(displayEnd)}`;
     return { start, end, label };
   } else {
     const start = new Date(Date.UTC(year, month, 1));
