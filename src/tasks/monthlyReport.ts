@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { Client } from "discord.js";
 import { runReport } from "../services/reportService";
-import { aggregateDaily } from "../services/metricsService";
+import { aggregateDaily, getPeriodStart } from "../services/metricsService";
 import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
 
@@ -31,10 +31,23 @@ export function scheduleMonthlyReport(client: Client): void {
           if (dayOfMonth !== scheduledDay || hour !== scheduledHour) continue;
 
           logger.info(`Iniciando relatório mensal para guild ${guild.id} (dia ${scheduledDay} às ${scheduledHour}:00)`);
+
+          // Agrega o último dia do mês anterior antes de gerar o relatório
           const yesterday = new Date(now);
           yesterday.setDate(yesterday.getDate() - 1);
           await aggregateDaily(guild.id, yesterday);
-          await runReport(guild, "monthly");
+
+          // Calcula o range do mês ANTERIOR (não o mês atual que acabou de começar)
+          // Ex: relatório dispara dia 1 → usa dados do mês passado completo
+          const currentMonthStart = getPeriodStart(now, "monthly"); // dia 1 deste mês 00:00 UTC
+          const prevMonthStart = new Date(Date.UTC(
+            currentMonthStart.getUTCFullYear(),
+            currentMonthStart.getUTCMonth() - 1,
+            1
+          ));
+          const prevMonthEnd = currentMonthStart; // dia 1 deste mês (exclusive)
+
+          await runReport(guild, "monthly", { start: prevMonthStart, end: prevMonthEnd });
         } catch (error) {
           logger.error(`Erro no relatório mensal da guild ${guild.id}:`, error);
         }
