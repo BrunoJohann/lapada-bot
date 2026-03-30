@@ -1,6 +1,6 @@
 import { Guild } from "discord.js";
 import { prisma } from "../database/prisma";
-import { getLeaderboard, getLeaderboardForRange } from "./metricsService";
+import { getLeaderboard, getLeaderboardForRange, getPeriodStart } from "./metricsService";
 import { logger } from "../utils/logger";
 
 export interface RewardResult {
@@ -190,4 +190,149 @@ export async function processRewards(
     })),
     roleName: role.name,
   };
+}
+
+// ── Cargo de Desafio Individual ────────────────────────────────────────────
+
+export interface ChallengeRewardResult {
+  assigned:      string[];
+  removed:       string[];
+  failed:        Array<{ username: string; reason: string }>;
+  roleName:      string;
+  minPoints:     number;
+  qualifiedCount: number;
+}
+
+/**
+ * Processa o cargo de desafio individual:
+ * qualquer usuário que atingir o mínimo de pontos no período recebe o cargo.
+ * O cargo é removido após challengeRoleDurationDays se o usuário não
+ * atingir o mínimo novamente.
+ */
+export async function processChallengeRewards(
+  guild:  Guild,
+  range?: { start: Date; end: Date }
+): Promise<ChallengeRewardResult> {
+  const config = await prisma.guildConfig.findUnique({ where: { guildId: guild.id } });
+
+  const roleId    = config?.challengeRoleId;
+  const minPoints = config?.challengeMinPoints;
+
+  if (!roleId || minPoints == null) {
+    logger.warn(`Guild ${guild.id}: cargo de desafio não configurado.`);
+    return { assigned: [], removed: [], failed: [], roleName: "N/A", minPoints: 0, qualifiedCount: 0 };
+  }
+
+  const role = guild.roles.cache.get(roleId) ?? (await guild.roles.fetch(roleId)) ?? undefined;
+  if (!role) {
+    logger.warn(`Guild ${guild.id}: cargo de desafio ${roleId} não encontrado.`);
+    return { assigned: [], removed: [], failed: [], roleName: "N/A", minPoints, qualifiedCount: 0 };
+  }
+
+  await guild.members.fetch();
+
+  // Determina o intervalo: usa range fornecido ou semana atual
+  const now   = new Date();
+  const start = range?.start ?? getPeriodStart(now, "weekly");
+  const end   = range?.end   ?? now;
+
+  // Busca todos os usuários que atingiram o mínimo de pontos no período
+  const qualifiedAggregates = await prisma.dailyAggregate.groupBy({
+    by:    ["userId"],
+    where: { guildId: guild.id, date: { gte: start, lt: end } },
+    _sum:  { score: true },
+    having:{ score: { _sum: { gte: minPoints } } },
+    orderBy: { _sum: { score: "desc" } },
+  });
+
+  const participantRoleIds = config?.participantRoleIds ?? [];
+  const qualifiedIds = new Set(
+    qualifiedAggregates
+      .filter((a) => {
+        if (participantRoleIds.length === 0) return true;
+        const member = guild.members.cache.get(a.userId);
+        return participantRoleIds.some((rid) => member?.roles.cache.has(rid));
+      })
+      .map((a) => a.userId)
+  );
+
+  const membersWithRole = guild.members.cache.filter((m) => m.roles.cache.has(roleId));
+  const durationDays    = config?.challengeRoleDurationDays ?? 7;
+
+  const assigned: string[] = [];
+  const removed:  string[] = [];
+  const failed:   Array<{ username: string; reason: string }> = [];
+
+  // Atribui cargo a quem atingiu o mínimo e ainda não tem
+  for (const userId of qualifiedIds) {
+    const member = guild.members.cache.get(userId);
+    if (!member) continue;
+    if (member.roles.cache.has(roleId)) continue;
+
+    try {
+      await member.roles.add(roleId, `Desafio: atingiu ${minPoints} pts no período`);
+      assigned.push(member.displayName ?? member.user.username);
+
+      await prisma.roleAssignment.create({
+        data: {
+          userId,
+          guildId:  guild.id,
+          roleId,
+          roleName: role.name,
+          reason:   "challenge_week",
+        },
+      });
+    } catch (error: unknown) {
+      const msg         = error instanceof Error ? error.message : String(error);
+      const displayName = member.displayName ?? member.user.username;
+      logger.error(`Erro ao atribuir cargo de desafio para ${displayName}:`, error);
+      failed.push({
+        username: displayName,
+        reason:   msg.includes("Missing Permissions")
+          ? "403 — bot sem permissão (verifique hierarquia de cargos)"
+          : msg,
+      });
+    }
+  }
+
+  // Remove cargo de quem não atingiu o mínimo E já passou o período de duração
+  for (const [, member] of membersWithRole) {
+    if (qualifiedIds.has(member.id)) continue;
+
+    const assignment = await prisma.roleAssignment.findFirst({
+      where:   { userId: member.id, guildId: guild.id, roleId, removedAt: null },
+      orderBy: { assignedAt: "desc" },
+    });
+    const daysSince = assignment
+      ? (Date.now() - assignment.assignedAt.getTime()) / 86_400_000
+      : Infinity;
+
+    if (daysSince < durationDays) continue;
+
+    try {
+      await member.roles.remove(roleId, "Não atingiu o mínimo de pontos e prazo expirou");
+      removed.push(member.displayName ?? member.user.username);
+
+      await prisma.roleAssignment.updateMany({
+        where: { userId: member.id, guildId: guild.id, roleId, removedAt: null },
+        data:  { removedAt: new Date(), reason: "challenge_drop" },
+      });
+    } catch (error: unknown) {
+      const msg         = error instanceof Error ? error.message : String(error);
+      const displayName = member.displayName ?? member.user.username;
+      logger.error(`Erro ao remover cargo de desafio de ${displayName}:`, error);
+      failed.push({
+        username: displayName,
+        reason:   msg.includes("Missing Permissions")
+          ? "403 — bot sem permissão ao remover (verifique hierarquia)"
+          : msg,
+      });
+    }
+  }
+
+  logger.info(
+    `Guild ${guild.id}: challenge rewards — ${assigned.length} atribuídos, ${removed.length} removidos, ${failed.length} falhas (mín: ${minPoints} pts)`
+  );
+
+  return { assigned, removed, failed, roleName: role.name, minPoints, qualifiedCount: qualifiedIds.size };
 }

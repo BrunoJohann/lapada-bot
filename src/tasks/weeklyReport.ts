@@ -2,7 +2,9 @@ import cron from "node-cron";
 import { Client } from "discord.js";
 import { runReport } from "../services/reportService";
 import { aggregateDaily, getPeriodStart } from "../services/metricsService";
+import { processChallengeRewards } from "../services/rewardsService";
 import { prisma } from "../database/prisma";
+import { TextChannel } from "discord.js";
 import { logger } from "../utils/logger";
 
 const DAY_NAMES = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
@@ -43,6 +45,25 @@ export function scheduleWeeklyReport(client: Client): void {
           const prevWeekEnd = currentWeekStart;                      // esta segunda 00:00 UTC (exclusive)
 
           await runReport(guild, "weekly", { start: prevWeekStart, end: prevWeekEnd });
+
+          // Processa cargo de desafio individual (se configurado)
+          const challengeResult = await processChallengeRewards(guild, { start: prevWeekStart, end: prevWeekEnd });
+          if (challengeResult.roleName !== "N/A" && (challengeResult.assigned.length > 0 || challengeResult.removed.length > 0)) {
+            const reportChannelId = config?.reportChannelId;
+            const channel = reportChannelId
+              ? (guild.channels.cache.get(reportChannelId) as TextChannel | undefined)
+              : undefined;
+            if (channel) {
+              const assignedTxt = challengeResult.assigned.length > 0
+                ? `🏅 **Atingiram o desafio (≥${challengeResult.minPoints} pts):** ${challengeResult.assigned.join(", ")}`
+                : "";
+              const removedTxt = challengeResult.removed.length > 0
+                ? `❌ **Perderam o cargo de desafio:** ${challengeResult.removed.join(", ")}`
+                : "";
+              const lines = [assignedTxt, removedTxt].filter(Boolean).join("\n");
+              await channel.send(`🎯 **Cargo de Desafio — \`${challengeResult.roleName}\`**\n${lines}`);
+            }
+          }
         } catch (error) {
           logger.error(`Erro no relatório semanal da guild ${guild.id}:`, error);
         }

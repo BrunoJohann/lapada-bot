@@ -7,7 +7,7 @@ import {
 import { prisma } from "../../database/prisma";
 import { invalidateGuildConfig } from "../../utils/guildConfig";
 import { aggregateDaily, resolveHistoricalRange } from "../../services/metricsService";
-import { processRewards } from "../../services/rewardsService";
+import { processRewards, processChallengeRewards } from "../../services/rewardsService";
 import { Command } from "../../client";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -234,9 +234,11 @@ export const data = new SlashCommandBuilder()
           .setDescription("Qual período processar")
           .setRequired(true)
           .addChoices(
-            { name: "Semanal", value: "weekly" },
-            { name: "Mensal",  value: "monthly" },
-            { name: "Ambos",   value: "both" },
+            { name: "Semanal",            value: "weekly" },
+            { name: "Mensal",             value: "monthly" },
+            { name: "Desafio",            value: "challenge" },
+            { name: "Semanal + Mensal",   value: "both" },
+            { name: "Todos",              value: "all" },
           )
       )
       .addIntegerOption((opt) =>
@@ -270,6 +272,39 @@ export const data = new SlashCommandBuilder()
       )
       .addIntegerOption((opt) =>
         opt.setName("semana").setDescription("Semana do mês (1–5) — aplica no 1º dia da semana").setMinValue(1).setMaxValue(5)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("cargo-desafio")
+      .setDescription("Define o cargo atribuído a qualquer usuário que bata o mínimo de pontos semanal")
+      .addRoleOption((opt) =>
+        opt.setName("cargo").setDescription("Cargo a ser atribuído ao vencedor do desafio").setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("pontos-minimos")
+      .setDescription("Define o mínimo de pontos semanais para ganhar o cargo de desafio")
+      .addNumberOption((opt) =>
+        opt
+          .setName("pontos")
+          .setDescription("Mínimo de pontos na semana (ex: 500). Use 0 para desabilitar.")
+          .setMinValue(0)
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("duracao-cargo-desafio")
+      .setDescription("Define por quantos dias o cargo de desafio é mantido após ser atribuído")
+      .addIntegerOption((opt) =>
+        opt
+          .setName("dias")
+          .setDescription("Dias que o cargo fica (1–90). Padrão: 7")
+          .setMinValue(1)
+          .setMaxValue(90)
+          .setRequired(true)
       )
   )
   .addSubcommand((sub) =>
@@ -395,8 +430,25 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     await interaction.editReply({ content: "✅ Mensagem enviada." });
     await (interaction.channel as TextChannel)?.send(`✅ ${texto}`);
     return;
+  } else if (sub === "cargo-desafio") {
+    const role = interaction.options.getRole("cargo", true);
+    updateData = { challengeRoleId: role.id };
+    confirmMsg = `Cargo de desafio definido para <@&${role.id}>`;
+  } else if (sub === "pontos-minimos") {
+    const pontos = interaction.options.getNumber("pontos", true);
+    if (pontos === 0) {
+      updateData = { challengeMinPoints: null };
+      confirmMsg = "Cargo de desafio **desabilitado**";
+    } else {
+      updateData = { challengeMinPoints: pontos };
+      confirmMsg = `Mínimo de pontos semanais definido para **${pontos} pts**`;
+    }
+  } else if (sub === "duracao-cargo-desafio") {
+    const dias = interaction.options.getInteger("dias", true);
+    updateData = { challengeRoleDurationDays: dias };
+    confirmMsg = `Duração do cargo de desafio definida para **${dias}** dias`;
   } else if (sub === "atribuir-cargos") {
-    const periodo = interaction.options.getString("periodo", true) as "weekly" | "monthly" | "both";
+    const periodo = interaction.options.getString("periodo", true) as "weekly" | "monthly" | "both" | "challenge" | "all";
     const mes     = interaction.options.getInteger("mes");
     const ano     = interaction.options.getInteger("ano");
     const semana  = interaction.options.getInteger("semana");
@@ -415,10 +467,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await aggregateDaily(guildId, new Date());
     }
 
-    const periods: Array<"weekly" | "monthly"> = periodo === "both" ? ["weekly", "monthly"] : [periodo];
+    const standardPeriods: Array<"weekly" | "monthly"> =
+      periodo === "all" || periodo === "both" ? ["weekly", "monthly"]
+      : (periodo === "weekly" || periodo === "monthly") ? [periodo]
+      : [];
+    const runChallenge = periodo === "challenge" || periodo === "all";
+
     const lines: string[] = [];
 
-    for (const p of periods) {
+    for (const p of standardPeriods) {
       const result = await processRewards(guild, p, historical ?? undefined);
       const label  = p === "weekly" ? "Semanal" : "Mensal";
 
@@ -440,7 +497,27 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       );
     }
 
-    await interaction.editReply(lines.join("\n\n"));
+    // Processa cargo de desafio se solicitado
+    if (runChallenge) {
+      const cr = await processChallengeRewards(guild, historical ?? undefined);
+      if (cr.roleName === "N/A") {
+        lines.push(`⚠️ **Desafio**: cargo ou mínimo de pontos não configurado.\n> Use \`/lapada-config cargo-desafio\` e \`/lapada-config pontos-minimos\` primeiro.`);
+      } else {
+        const assignedList = cr.assigned.length > 0 ? cr.assigned.join(", ") : "nenhum";
+        const removedList  = cr.removed.length  > 0 ? cr.removed.join(", ")  : "nenhum";
+        const failedLines  = cr.failed.map((f) => `⚠️ ${f.username}: ${f.reason}`).join("\n");
+        lines.push(
+          `${cr.failed.length > 0 ? "⚠️" : "✅"} **Desafio** — cargo: \`${cr.roleName}\` · mín: **${cr.minPoints} pts**` +
+          (historical ? ` · período: ${historical.label}` : "") + `\n` +
+          `> 🏅 Qualificados: ${cr.qualifiedCount} usuário(s)\n` +
+          `> ✅ Atribuídos: ${assignedList}\n` +
+          `> ❌ Removidos: ${removedList}` +
+          (failedLines ? `\n> 🚫 Falhas:\n${failedLines.split("\n").map((l) => `> ${l}`).join("\n")}` : "")
+        );
+      }
+    }
+
+    await interaction.editReply(lines.join("\n\n") || "✅ Nenhuma ação necessária.");
     return;
   } else if (sub === "adicionar-pontos" || sub === "remover-pontos") {
     const targetUser = interaction.options.getUser("usuario", true);

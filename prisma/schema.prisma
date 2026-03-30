@@ -140,6 +140,11 @@ model GuildConfig {
   streamEnabled         Boolean  @default(false)
   streamMultiplier      Float    @default(1.5)
 
+  // Cargo de desafio individual: qualquer um que bata o mínimo de pontos na semana
+  challengeRoleId           String?
+  challengeMinPoints        Float?   // null = desafio desabilitado
+  challengeRoleDurationDays Int      @default(7)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
