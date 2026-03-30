@@ -111,12 +111,20 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
         }, 0) / 60000
     );
 
-    const score = calculateScore(messageCount, voiceMinutes, streamMinutes, reactionsCount, 0, voiceMultiplier, streamEnabled ? streamMultiplier : 0);
+    // Preserva pontos manuais adicionados por admin (não são sobrescritos pelo aggregate)
+    const existing = await prisma.dailyAggregate.findUnique({
+      where: { userId_guildId_date: { userId: user.id, guildId, date: dayStart } },
+      select: { manualPoints: true },
+    });
+    const manualPoints = existing?.manualPoints ?? 0;
+
+    const baseScore = calculateScore(messageCount, voiceMinutes, streamMinutes, reactionsCount, 0, voiceMultiplier, streamEnabled ? streamMultiplier : 0);
+    const score = baseScore + manualPoints;
 
     await prisma.dailyAggregate.upsert({
       where: { userId_guildId_date: { userId: user.id, guildId, date: dayStart } },
       update: { messageCount, voiceMinutes, streamMinutes, reactionsCount, score },
-      create: { userId: user.id, guildId, date: dayStart, messageCount, voiceMinutes, streamMinutes, reactionsCount, score },
+      create: { userId: user.id, guildId, date: dayStart, messageCount, voiceMinutes, streamMinutes, reactionsCount, score, manualPoints: 0 },
     });
   }
 

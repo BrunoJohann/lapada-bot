@@ -94,6 +94,7 @@ model DailyAggregate {
   streamMinutes  Int      @default(0)
   reactionsCount Int      @default(0) // reações recebidas
   score          Float    @default(0)
+  manualPoints   Float    @default(0) // ajuste manual por admin (positivo = bônus, negativo = penalidade)
 
   user User @relation(fields: [userId], references: [id])
 

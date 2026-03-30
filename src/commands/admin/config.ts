@@ -238,6 +238,42 @@ export const data = new SlashCommandBuilder()
           )
       )
   )
+  .addSubcommand((sub) =>
+    sub
+      .setName("adicionar-pontos")
+      .setDescription("Adiciona pontos manualmente a um usuário")
+      .addUserOption((opt) =>
+        opt.setName("usuario").setDescription("Usuário que receberá os pontos").setRequired(true)
+      )
+      .addNumberOption((opt) =>
+        opt
+          .setName("pontos")
+          .setDescription("Quantidade de pontos a adicionar (ex: 50)")
+          .setMinValue(0.1)
+          .setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("remover-pontos")
+      .setDescription("Remove pontos manualmente de um usuário")
+      .addUserOption((opt) =>
+        opt.setName("usuario").setDescription("Usuário que perderá os pontos").setRequired(true)
+      )
+      .addNumberOption((opt) =>
+        opt
+          .setName("pontos")
+          .setDescription("Quantidade de pontos a remover (ex: 50)")
+          .setMinValue(0.1)
+          .setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
+      )
+  )
 ;
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -370,6 +406,48 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     }
 
     await interaction.editReply(lines.join("\n\n"));
+    return;
+  } else if (sub === "adicionar-pontos" || sub === "remover-pontos") {
+    const targetUser = interaction.options.getUser("usuario", true);
+    const pontos     = interaction.options.getNumber("pontos", true);
+    const motivo     = interaction.options.getString("motivo") ?? "Ajuste manual por admin";
+    const delta      = sub === "adicionar-pontos" ? pontos : -pontos;
+
+    const hoje = new Date();
+    hoje.setUTCHours(0, 0, 0, 0);
+
+    // Garante que o usuário existe no banco
+    await prisma.user.upsert({
+      where: { id: targetUser.id },
+      update: { username: targetUser.username },
+      create: { id: targetUser.id, guildId, username: targetUser.username, displayName: targetUser.displayName },
+    });
+
+    // Busca o registro do dia (ou cria zerado) e incrementa manualPoints
+    const existing = await prisma.dailyAggregate.findUnique({
+      where: { userId_guildId_date: { userId: targetUser.id, guildId, date: hoje } },
+    });
+
+    const newManual = (existing?.manualPoints ?? 0) + delta;
+    const newScore  = (existing?.score ?? 0) + delta;
+
+    await prisma.dailyAggregate.upsert({
+      where: { userId_guildId_date: { userId: targetUser.id, guildId, date: hoje } },
+      update: { manualPoints: newManual, score: newScore },
+      create: {
+        userId: targetUser.id, guildId, date: hoje,
+        messageCount: 0, voiceMinutes: 0, streamMinutes: 0, reactionsCount: 0,
+        score: delta, manualPoints: delta,
+      },
+    });
+
+    const sinal = delta > 0 ? "+" : "";
+    const emoji = delta > 0 ? "➕" : "➖";
+    await interaction.editReply(
+      `${emoji} **${sinal}${pontos} pontos** para <@${targetUser.id}>\n` +
+      `> Motivo: ${motivo}\n` +
+      `> Total manual hoje: **${sinal}${newManual.toFixed(1)} pts**`
+    );
     return;
   } else if (sub === "cargo-participante-remover") {
     const role = interaction.options.getRole("cargo", true);
