@@ -33,6 +33,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     `**Relatório mensal:** dia ${config?.monthlyReportDay ?? 1} às ${config?.monthlyReportHour ?? 8}:00`,
     `**Voz:** **${config?.voiceMultiplier ?? 2.0}x** pts/min`,
     `**Stream:** ${config?.streamEnabled ? `✅ habilitado · **${config.streamMultiplier}x** pts/min` : "❌ desabilitado"}`,
+    `**Cargo de desafio:** ${config?.challengeRoleId ? `<@&${config.challengeRoleId}>` : "não configurado"}${config?.challengeMinPoints ? ` · mín **${config.challengeMinPoints} pts** · dura **${config.challengeRoleDurationDays ?? 7} dias**` : ""}`,
   ];
 
   await interaction.editReply(lines.join("\n"));
