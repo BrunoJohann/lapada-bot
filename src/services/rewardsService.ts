@@ -73,7 +73,7 @@ export async function processRewards(
     if (!member.roles.cache.has(roleId)) {
       try {
         await member.roles.add(roleId, `Top ${topN} ${period} - score: ${topUser.score.toFixed(1)}`);
-        assigned.push(topUser.username);
+        assigned.push(member.displayName ?? topUser.displayName ?? topUser.username);
 
         await prisma.roleAssignment.create({
           data: {
@@ -86,9 +86,10 @@ export async function processRewards(
         });
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
-        logger.error(`Erro ao atribuir cargo para ${topUser.username}:`, error);
+        const displayName = member.displayName ?? topUser.displayName ?? topUser.username;
+        logger.error(`Erro ao atribuir cargo para ${displayName}:`, error);
         failed.push({
-          username: topUser.username,
+          username: displayName,
           reason:   msg.includes("Missing Permissions")
             ? "403 — bot sem permissão (verifique hierarquia de cargos)"
             : msg,
@@ -117,7 +118,7 @@ export async function processRewards(
 
     try {
       await member.roles.remove(roleId, "Saiu do top ranking e prazo expirou");
-      removed.push(member.user.username);
+      removed.push(member.displayName ?? member.user.username);
 
       await prisma.roleAssignment.updateMany({
         where: { userId: member.id, guildId: guild.id, roleId, removedAt: null },
@@ -125,9 +126,9 @@ export async function processRewards(
       });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error(`Erro ao remover cargo de ${member.user.username}:`, error);
+      logger.error(`Erro ao remover cargo de ${member.displayName ?? member.user.username}:`, error);
       failed.push({
-        username: member.user.username,
+        username: member.displayName ?? member.user.username,
         reason:   msg.includes("Missing Permissions")
           ? "403 — bot sem permissão ao remover (verifique hierarquia)"
           : msg,
@@ -151,7 +152,8 @@ export async function processRewards(
     if (!lastActivity || lastActivity.date < inactiveThreshold) {
       try {
         await member.roles.remove(roleId, `Inativo há mais de ${inactiveDays} dias`);
-        if (!removed.includes(member.user.username)) removed.push(member.user.username);
+        const name = member.displayName ?? member.user.username;
+        if (!removed.includes(name)) removed.push(name);
 
         await prisma.roleAssignment.updateMany({
           where: { userId: member.id, guildId: guild.id, roleId, removedAt: null },
@@ -159,9 +161,9 @@ export async function processRewards(
         });
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
-        logger.error(`Erro ao remover cargo por inatividade de ${member.user.username}:`, error);
+        logger.error(`Erro ao remover cargo por inatividade de ${member.displayName ?? member.user.username}:`, error);
         failed.push({
-          username: member.user.username,
+          username: member.displayName ?? member.user.username,
           reason:   msg.includes("Missing Permissions")
             ? "403 — bot sem permissão ao remover (verifique hierarquia)"
             : msg,
