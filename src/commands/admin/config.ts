@@ -259,7 +259,7 @@ export const data = new SlashCommandBuilder()
         opt.setName("usuario").setDescription("Usuário que receberá os pontos").setRequired(true)
       )
       .addNumberOption((opt) =>
-        opt.setName("pontos").setDescription("Quantidade de pontos a adicionar (ex: 50)").setMinValue(0.1).setRequired(true)
+        opt.setName("pontos").setDescription("Pontos a adicionar — aceita decimais (ex: 50 ou 12.5)").setMinValue(0.1).setRequired(true)
       )
       .addStringOption((opt) =>
         opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
@@ -315,7 +315,7 @@ export const data = new SlashCommandBuilder()
         opt.setName("usuario").setDescription("Usuário que perderá os pontos").setRequired(true)
       )
       .addNumberOption((opt) =>
-        opt.setName("pontos").setDescription("Quantidade de pontos a remover (ex: 50)").setMinValue(0.1).setRequired(true)
+        opt.setName("pontos").setDescription("Pontos a remover — aceita decimais (ex: 50 ou 12.5)").setMinValue(0.1).setRequired(true)
       )
       .addStringOption((opt) =>
         opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
