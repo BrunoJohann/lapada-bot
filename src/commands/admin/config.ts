@@ -258,8 +258,8 @@ export const data = new SlashCommandBuilder()
       .addUserOption((opt) =>
         opt.setName("usuario").setDescription("Usuário que receberá os pontos").setRequired(true)
       )
-      .addIntegerOption((opt) =>
-        opt.setName("pontos").setDescription("Quantidade de pontos a adicionar (ex: 50, 200, 500)").setMinValue(1).setRequired(true)
+      .addStringOption((opt) =>
+        opt.setName("pontos").setDescription("Pontos a adicionar — use ponto ou vírgula (ex: 50, 509.5, 12,5)").setRequired(true)
       )
       .addStringOption((opt) =>
         opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
@@ -314,8 +314,8 @@ export const data = new SlashCommandBuilder()
       .addUserOption((opt) =>
         opt.setName("usuario").setDescription("Usuário que perderá os pontos").setRequired(true)
       )
-      .addIntegerOption((opt) =>
-        opt.setName("pontos").setDescription("Quantidade de pontos a remover (ex: 50, 200, 500)").setMinValue(1).setRequired(true)
+      .addStringOption((opt) =>
+        opt.setName("pontos").setDescription("Pontos a remover — use ponto ou vírgula (ex: 50, 509.5, 12,5)").setRequired(true)
       )
       .addStringOption((opt) =>
         opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
@@ -521,7 +521,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   } else if (sub === "adicionar-pontos" || sub === "remover-pontos") {
     const targetUser = interaction.options.getUser("usuario", true);
-    const pontos     = interaction.options.getInteger("pontos", true);
+    // Aceita tanto ponto (509.5) quanto vírgula (509,5) como separador decimal
+    const pontosRaw  = interaction.options.getString("pontos", true).trim().replace(",", ".");
+    const pontos     = parseFloat(pontosRaw);
+    if (isNaN(pontos) || pontos <= 0) {
+      await interaction.editReply("❌ Valor inválido. Use um número positivo (ex: `50`, `509.5` ou `12,5`).");
+      return;
+    }
     const motivo     = interaction.options.getString("motivo") ?? "Ajuste manual por admin";
     const mes        = interaction.options.getInteger("mes");
     const ano        = interaction.options.getInteger("ano");
