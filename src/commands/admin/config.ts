@@ -258,8 +258,8 @@ export const data = new SlashCommandBuilder()
       .addUserOption((opt) =>
         opt.setName("usuario").setDescription("Usuário que receberá os pontos").setRequired(true)
       )
-      .addNumberOption((opt) =>
-        opt.setName("pontos").setDescription("Pontos a adicionar — aceita decimais (ex: 50 ou 12.5)").setMinValue(0.1).setRequired(true)
+      .addIntegerOption((opt) =>
+        opt.setName("pontos").setDescription("Quantidade de pontos a adicionar (ex: 50, 200, 500)").setMinValue(1).setRequired(true)
       )
       .addStringOption((opt) =>
         opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
@@ -314,8 +314,8 @@ export const data = new SlashCommandBuilder()
       .addUserOption((opt) =>
         opt.setName("usuario").setDescription("Usuário que perderá os pontos").setRequired(true)
       )
-      .addNumberOption((opt) =>
-        opt.setName("pontos").setDescription("Pontos a remover — aceita decimais (ex: 50 ou 12.5)").setMinValue(0.1).setRequired(true)
+      .addIntegerOption((opt) =>
+        opt.setName("pontos").setDescription("Quantidade de pontos a remover (ex: 50, 200, 500)").setMinValue(1).setRequired(true)
       )
       .addStringOption((opt) =>
         opt.setName("motivo").setDescription("Motivo do ajuste (opcional)").setRequired(false)
@@ -521,7 +521,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   } else if (sub === "adicionar-pontos" || sub === "remover-pontos") {
     const targetUser = interaction.options.getUser("usuario", true);
-    const pontos     = interaction.options.getNumber("pontos", true);
+    const pontos     = interaction.options.getInteger("pontos", true);
     const motivo     = interaction.options.getString("motivo") ?? "Ajuste manual por admin";
     const mes        = interaction.options.getInteger("mes");
     const ano        = interaction.options.getInteger("ano");
