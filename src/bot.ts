@@ -8,6 +8,7 @@ import { checkDbConnection } from "./database/prisma";
 import { scheduleWeeklyReport } from "./tasks/weeklyReport";
 import { scheduleMonthlyReport, scheduleDailyAggregate } from "./tasks/monthlyReport";
 import { scheduleDailyLeaderboard } from "./tasks/dailyLeaderboard";
+import { reconcileOpenSessions } from "./tasks/reconcileSessions";
 
 registerProcessHandlers();
 
@@ -89,6 +90,11 @@ client.once(Events.ClientReady, (c) => {
   logger.info(`Presente em ${c.guilds.cache.size} servidor(es)`);
 
   c.user.setActivity("atividade dos membros", { type: ActivityType.Watching });
+
+  // Fecha sessões que ficaram abertas enquanto o bot estava offline
+  reconcileOpenSessions(c).catch((err) =>
+    logger.error("Erro na reconciliação de sessões:", err)
+  );
 
   scheduleWeeklyReport(client);
   scheduleMonthlyReport(client);
