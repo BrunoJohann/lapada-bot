@@ -2,6 +2,13 @@ FROM node:22-slim
 
 WORKDIR /app
 
+# Install fonts (required for canvas text rendering)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-liberation \
+    fontconfig \
+    && fc-cache -fv \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
