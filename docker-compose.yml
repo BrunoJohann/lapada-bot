@@ -20,6 +20,28 @@ services:
     volumes:
       - redis_data:/data
 
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: discord_bot_dev
+    env_file:
+      - .env
+    environment:
+      # Override URLs to reach the Docker services by name instead of localhost
+      DATABASE_URL: postgresql://discord_bot:discord_bot_pass@postgres:5432/discord_bot
+      DIRECT_URL: postgresql://discord_bot:discord_bot_pass@postgres:5432/discord_bot
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+    volumes:
+      # Mount only source files — node_modules stays inside the container
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
