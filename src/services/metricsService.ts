@@ -343,6 +343,51 @@ export async function getLeaderboardForRange(
   });
 }
 
+export interface DailyPoint {
+  date: Date;
+  voiceMinutes: number;
+  score: number;
+  messageCount: number;
+}
+
+/**
+ * Retorna uma série temporal por dia para um gráfico de atividade.
+ * Se userId for omitido, agrega todos os usuários do servidor.
+ */
+export async function getDailyBreakdown(
+  guildId: string,
+  start: Date,
+  end: Date,
+  userId?: string
+): Promise<DailyPoint[]> {
+  const where = userId
+    ? { guildId, userId, date: { gte: start, lt: end } }
+    : { guildId, date: { gte: start, lt: end } };
+
+  const rows = await prisma.dailyAggregate.groupBy({
+    by: ["date"],
+    where,
+    _sum: { voiceMinutes: true, score: true, messageCount: true },
+    orderBy: { date: "asc" },
+  });
+
+  // Preenche dias sem dados com zero para a linha não ter lacunas
+  const points: DailyPoint[] = [];
+  const cursor = new Date(start);
+  while (cursor < end) {
+    const row = rows.find((r) => r.date.getTime() === cursor.getTime());
+    points.push({
+      date: new Date(cursor),
+      voiceMinutes: row?._sum.voiceMinutes ?? 0,
+      score:        row?._sum.score        ?? 0,
+      messageCount: row?._sum.messageCount ?? 0,
+    });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return points;
+}
+
 export async function getUserStatsForRange(
   userId: string,
   guildId: string,

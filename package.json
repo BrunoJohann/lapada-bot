@@ -17,12 +17,17 @@
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
+    "chart.js": "^4.5.1",
+    "chartjs-node-canvas": "^5.0.0",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
     "groq-sdk": "^1.1.2",
     "ioredis": "^5.4.1",
     "node-cron": "^3.0.3",
     "zod": "^3.23.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["canvas"]
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
