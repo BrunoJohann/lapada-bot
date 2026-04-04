@@ -1,17 +1,16 @@
-import { createCanvas } from "@napi-rs/canvas";
-import { Chart, registerables, ChartConfiguration } from "chart.js";
+import { ChartJSNodeCanvas } from "chartjs-node-canvas";
+import { ChartConfiguration } from "chart.js";
 import { DailyPoint } from "./metricsService";
-
-Chart.register(...registerables);
 
 const WIDTH  = 900;
 const HEIGHT = 400;
 
-const DISCORD_BG  = "#2b2d31";
-const GRID_COLOR  = "rgba(255,255,255,0.07)";
-const TEXT_COLOR  = "#b5bac1";
-const LINE_COLOR  = "#5865f2";
-const FILL_COLOR  = "rgba(88,101,242,0.15)";
+const renderer = new ChartJSNodeCanvas({ width: WIDTH, height: HEIGHT, backgroundColour: "#2b2d31" });
+
+const GRID_COLOR = "rgba(255,255,255,0.07)";
+const TEXT_COLOR = "#b5bac1";
+const LINE_COLOR = "#5865f2";
+const FILL_COLOR = "rgba(88,101,242,0.15)";
 
 function dayLabel(date: Date): string {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
@@ -30,14 +29,6 @@ export async function buildActivityChart(
     : points.map((p) => Math.round(p.score * 10) / 10);
 
   const yLabel = metric === "voz" ? "Minutos em voz" : "Pontos";
-
-  const canvas = createCanvas(WIDTH, HEIGHT);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ctx = canvas.getContext("2d") as any;
-
-  // Background
-  ctx.fillStyle = DISCORD_BG;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
   const config: ChartConfiguration = {
     type: "line",
@@ -95,7 +86,5 @@ export async function buildActivityChart(
     },
   };
 
-  new Chart(ctx, config);
-
-  return canvas.toBuffer("image/png") as unknown as Buffer;
+  return renderer.renderToBuffer(config) as Promise<Buffer>;
 }
