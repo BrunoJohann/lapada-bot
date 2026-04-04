@@ -12,6 +12,9 @@ COPY prisma ./prisma/
 # Install all dependencies
 RUN pnpm install --frozen-lockfile
 
+# Ensure canvas native binary is built/downloaded
+RUN pnpm rebuild canvas
+
 # Generate Prisma client
 RUN pnpm prisma generate
 

@@ -10,6 +10,10 @@ COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma/
 
 RUN pnpm install --frozen-lockfile
+
+# Ensure canvas native binary is built/downloaded
+RUN pnpm rebuild canvas
+
 RUN pnpm prisma generate
 
 # src/ and prisma/ are mounted as volumes at runtime for hot reload
