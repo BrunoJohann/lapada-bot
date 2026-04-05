@@ -16,6 +16,12 @@ function dayLabel(date: Date): string {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 }
 
+function minsToHours(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ""}` : `${m}min`;
+}
+
 export type ChartMetric = "voz" | "pontos";
 
 export async function buildActivityChart(
@@ -28,7 +34,7 @@ export async function buildActivityChart(
     ? points.map((p) => p.voiceMinutes)
     : points.map((p) => Math.round(p.score * 10) / 10);
 
-  const yLabel = metric === "voz" ? "Minutos em voz" : "Pontos";
+  const yLabel = metric === "voz" ? "Tempo em voz" : "Pontos";
 
   const config: ChartConfiguration = {
     type: "line",
@@ -71,7 +77,13 @@ export async function buildActivityChart(
         },
         y: {
           beginAtZero: true,
-          ticks: { color: TEXT_COLOR, font: { size: 11 } },
+          ticks: {
+            color: TEXT_COLOR,
+            font: { size: 11 },
+            ...(metric === "voz" && {
+              callback: (value) => minsToHours(Number(value)),
+            }),
+          },
           grid: { color: GRID_COLOR },
           border: { color: GRID_COLOR },
           title: {
