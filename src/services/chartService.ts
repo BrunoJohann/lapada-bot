@@ -36,6 +36,17 @@ export async function buildActivityChart(
 
   const yLabel = metric === "voz" ? "Tempo em voz" : "Pontos";
 
+  // Total e máximo do período
+  const total  = data.reduce((sum, v) => sum + v, 0);
+  const maxVal = Math.max(...data);
+  const maxIdx = data.indexOf(maxVal);
+  const maxDay = labels[maxIdx] ?? "";
+
+  const fmt = (v: number) =>
+    metric === "voz" ? minsToHours(Math.round(v)) : `${Math.round(v * 10) / 10} pts`;
+
+  const subtitle = `Total: ${fmt(total)}   ·   Máximo: ${fmt(maxVal)} em ${maxDay}`;
+
   const config: ChartConfiguration = {
     type: "line",
     data: {
@@ -66,7 +77,14 @@ export async function buildActivityChart(
           text: title,
           color: "#ffffff",
           font: { size: 16, weight: "bold" },
-          padding: { bottom: 16 },
+          padding: { bottom: 4 },
+        },
+        subtitle: {
+          display: true,
+          text: subtitle,
+          color: TEXT_COLOR,
+          font: { size: 12 },
+          padding: { bottom: 12 },
         },
       },
       scales: {
