@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Client, TextChannel } from "discord.js";
-import { aggregateDaily, getLeaderboard, getPeriodLabel } from "../services/metricsService";
+import { aggregateDaily, getLeaderboard, getPeriodLabel, toLocalNow } from "../services/metricsService";
 import { buildLeaderboardEmbed } from "../utils/embeds";
 import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
@@ -45,7 +45,7 @@ export function scheduleDailyLeaderboard(client: Client): void {
           const today = new Date();
           await aggregateDaily(guild.id, today);
 
-          const entries = await getLeaderboard(guild.id, "weekly", config.weeklyTopN ?? 10);
+          const entries = await getLeaderboard(guild.id, "weekly", config.weeklyTopN ?? 10, timezone);
 
           const resolvedEntries = entries.map((e) => ({
             ...e,
@@ -55,7 +55,7 @@ export function scheduleDailyLeaderboard(client: Client): void {
               e.username,
           }));
 
-          const periodLabel = getPeriodLabel(today, "weekly");
+          const periodLabel = getPeriodLabel(toLocalNow(timezone), "weekly");
 
           const embed = buildLeaderboardEmbed({
             period: "weekly",

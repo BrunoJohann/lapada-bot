@@ -31,13 +31,54 @@ function calculateScore(
   return base * (1 + streakDays * 0.05);
 }
 
-export async function aggregateDaily(guildId: string, date: Date): Promise<void> {
-  const dayStart = new Date(date);
-  dayStart.setUTCHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart);
-  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+/**
+ * Computes the UTC timestamps for the start and end of the local day that contains `utcDate`.
+ * The `localDate` key is UTC midnight of that local date (used as the DailyAggregate primary key).
+ *
+ * Example for BRT (UTC-3): "April 5 local" → dayStart = 03:00 UTC Apr 5, dayEnd = 03:00 UTC Apr 6.
+ */
+function getLocalDayBoundaries(
+  utcDate: Date,
+  timezone: string
+): { dayStart: Date; dayEnd: Date; localDate: Date } {
+  // Get the local date string (YYYY-MM-DD) for this UTC instant
+  const localDateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: timezone }).format(utcDate);
 
+  // Find what local time shows when UTC is at midnight of this local date
+  const utcMidnight = new Date(localDateStr + "T00:00:00Z");
+  const localTimeAtUtcMidnight = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(utcMidnight);
+
+  const [hStr, mStr] = localTimeAtUtcMidnight.split(":");
+  const h = parseInt(hStr) === 24 ? 0 : parseInt(hStr);
+  const m = parseInt(mStr);
+  const localMinsAtUtcMidnight = h * 60 + m;
+
+  // Compute UTC timestamp for local midnight:
+  // If local shows 21:00 at UTC midnight (UTC-3), local midnight = UTC midnight + 3h
+  // If local shows 05:30 at UTC midnight (UTC+5:30), local midnight = UTC midnight - 5.5h
+  const dayStartMs =
+    localMinsAtUtcMidnight > 720
+      ? utcMidnight.getTime() + (1440 - localMinsAtUtcMidnight) * 60_000
+      : utcMidnight.getTime() - localMinsAtUtcMidnight * 60_000;
+
+  return {
+    dayStart:  new Date(dayStartMs),
+    dayEnd:    new Date(dayStartMs + 86_400_000),
+    localDate: utcMidnight, // UTC midnight = unique key for this local date
+  };
+}
+
+export async function aggregateDaily(guildId: string, date: Date): Promise<void> {
   const config = await prisma.guildConfig.findUnique({ where: { guildId } });
+  const timezone = config?.timezone ?? "America/Sao_Paulo";
+
+  const { dayStart, dayEnd, localDate } = getLocalDayBoundaries(date, timezone);
+
   const voiceMultiplier  = config?.voiceMultiplier  ?? 2.0;
   const streamEnabled    = config?.streamEnabled    ?? false;
   const streamMultiplier = config?.streamMultiplier ?? 1.5;
@@ -49,10 +90,10 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
       prisma.messageActivity.count({
         where: { userId: user.id, guildId, createdAt: { gte: dayStart, lt: dayEnd } },
       }),
-      // Inclui sessões que cruzam a fronteira do dia UTC:
+      // Inclui sessões que cruzam a fronteira do dia local:
       // (1) começou e terminou dentro do dia
       // (2) começou antes, terminou dentro do dia
-      // (3) começou antes e ainda está aberta (pode estar cruzando a meia-noite)
+      // (3) começou antes e ainda está aberta (pode estar cruzando a meia-noite local)
       prisma.voiceSession.findMany({
         where: {
           userId: user.id,
@@ -88,8 +129,8 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
 
     const now = Date.now();
 
-    // Calcula duração apenas dentro dos limites do dia UTC (clamp)
-    // Isso garante que sessões que cruzam a meia-noite UTC sejam contadas corretamente
+    // Calcula duração apenas dentro dos limites do dia local (clamp)
+    // Sessões que cruzam a meia-noite local são divididas entre os dois dias
     const voiceMinutes = Math.floor(
       voiceSessions.reduce((sum, s) => {
         const start = Math.max(s.joinedAt.getTime(), dayStart.getTime());
@@ -113,7 +154,7 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
 
     // Preserva pontos manuais adicionados por admin (não são sobrescritos pelo aggregate)
     const existing = await prisma.dailyAggregate.findUnique({
-      where: { userId_guildId_date: { userId: user.id, guildId, date: dayStart } },
+      where: { userId_guildId_date: { userId: user.id, guildId, date: localDate } },
       select: { manualPoints: true },
     });
     const manualPoints = existing?.manualPoints ?? 0;
@@ -122,21 +163,22 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
     const score = baseScore + manualPoints;
 
     await prisma.dailyAggregate.upsert({
-      where: { userId_guildId_date: { userId: user.id, guildId, date: dayStart } },
+      where: { userId_guildId_date: { userId: user.id, guildId, date: localDate } },
       update: { messageCount, voiceMinutes, streamMinutes, reactionsCount, score },
-      create: { userId: user.id, guildId, date: dayStart, messageCount, voiceMinutes, streamMinutes, reactionsCount, score, manualPoints: 0 },
+      create: { userId: user.id, guildId, date: localDate, messageCount, voiceMinutes, streamMinutes, reactionsCount, score, manualPoints: 0 },
     });
   }
 
-  logger.info(`Agregação diária concluída para guild ${guildId} em ${dayStart.toISOString().split("T")[0]}`);
+  logger.info(`Agregação diária concluída para guild ${guildId} em ${localDate.toISOString().split("T")[0]} (${timezone})`);
 }
 
 export async function getLeaderboard(
   guildId: string,
   period: "weekly" | "monthly",
-  limit: number = 10
+  limit: number = 10,
+  timezone: string = "UTC"
 ): Promise<UserScore[]> {
-  const now = new Date();
+  const now = toLocalNow(timezone);
   const periodStart = getPeriodStart(now, period);
 
   const aggregates = await prisma.dailyAggregate.groupBy({
@@ -170,9 +212,10 @@ export async function getLeaderboard(
 export async function getUserStats(
   userId: string,
   guildId: string,
-  period: "weekly" | "monthly"
+  period: "weekly" | "monthly",
+  timezone: string = "UTC"
 ): Promise<UserScore | null> {
-  const now = new Date();
+  const now = toLocalNow(timezone);
   const periodStart = getPeriodStart(now, period);
 
   const agg = await prisma.dailyAggregate.aggregate({
@@ -222,6 +265,24 @@ export async function searchActiveUsers(
   });
 
   return users.map((u) => ({ id: u.id, label: u.displayName ?? u.username }));
+}
+
+/**
+ * Returns a Date whose UTC fields represent the current local time in the given timezone.
+ * Allows getPeriodStart (which uses getUTC* methods) to operate on local time instead of UTC.
+ * Example: at 21:23 BRT (UTC-3) = 00:23 UTC, this returns a date where getUTCHours() === 21.
+ */
+export function toLocalNow(timezone: string): Date {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
+  const h = get("hour");
+  return new Date(Date.UTC(get("year"), get("month") - 1, get("day"), h === 24 ? 0 : h, get("minute"), get("second")));
 }
 
 export function getPeriodStart(date: Date, period: "weekly" | "monthly"): Date {

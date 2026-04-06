@@ -10,8 +10,10 @@ import {
   getPeriodLabel,
   resolveHistoricalRange,
   searchActiveUsers,
+  toLocalNow,
 } from "../services/metricsService";
 import { buildStatsEmbed } from "../utils/embeds";
+import { getCachedGuildConfig } from "../utils/guildConfig";
 import { Command } from "../client";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -102,9 +104,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     periodLabel = historical.label;
   } else {
     // ── Período corrente ───────────────────────────────────────────────────
-    const period = (interaction.options.getString("periodo") ?? "weekly") as "weekly" | "monthly";
-    stats        = await getUserStats(targetId, guildId, period);
-    periodLabel  = getPeriodLabel(new Date(), period);
+    const period   = (interaction.options.getString("periodo") ?? "weekly") as "weekly" | "monthly";
+    const config   = await getCachedGuildConfig(guildId);
+    const timezone = config?.timezone ?? "America/Sao_Paulo";
+    stats          = await getUserStats(targetId, guildId, period, timezone);
+    periodLabel    = getPeriodLabel(toLocalNow(timezone), period);
   }
 
   if (!stats) {

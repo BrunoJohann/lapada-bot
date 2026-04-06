@@ -5,6 +5,7 @@ import {
   getPeriodLabel,
   resolveHistoricalRange,
   aggregateDaily,
+  toLocalNow,
 } from "../services/metricsService";
 import { buildLeaderboardEmbed } from "../utils/embeds";
 import { getCached, getRedis } from "../utils/redis";
@@ -83,8 +84,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await aggregateDaily(guildId, new Date());
     }
 
-    entries     = await getCached(cacheKey, 1800, () => getLeaderboard(guildId, period, 10));
-    periodLabel = getPeriodLabel(new Date(), period);
+    const timezone = config?.timezone ?? "America/Sao_Paulo";
+    entries     = await getCached(cacheKey, 1800, () => getLeaderboard(guildId, period, 10, timezone));
+    periodLabel = getPeriodLabel(toLocalNow(timezone), period);
   }
 
   // Resolve apelidos e filtra por cargos participantes

@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { Client } from "discord.js";
 import { runReport } from "../services/reportService";
-import { aggregateDaily, getPeriodStart } from "../services/metricsService";
+import { aggregateDaily, getPeriodStart, toLocalNow } from "../services/metricsService";
 import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
 
@@ -39,7 +39,7 @@ export function scheduleMonthlyReport(client: Client): void {
 
           // Calcula o range do mês ANTERIOR (não o mês atual que acabou de começar)
           // Ex: relatório dispara dia 1 → usa dados do mês passado completo
-          const currentMonthStart = getPeriodStart(now, "monthly"); // dia 1 deste mês 00:00 UTC
+          const currentMonthStart = getPeriodStart(toLocalNow(timezone), "monthly"); // dia 1 deste mês 00:00 UTC (horário local)
           const prevMonthStart = new Date(Date.UTC(
             currentMonthStart.getUTCFullYear(),
             currentMonthStart.getUTCMonth() - 1,

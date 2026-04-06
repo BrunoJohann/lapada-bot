@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { Client } from "discord.js";
 import { runReport } from "../services/reportService";
-import { aggregateDaily, getPeriodStart } from "../services/metricsService";
+import { aggregateDaily, getPeriodStart, toLocalNow } from "../services/metricsService";
 import { processChallengeRewards } from "../services/rewardsService";
 import { prisma } from "../database/prisma";
 import { TextChannel } from "discord.js";
@@ -39,7 +39,7 @@ export function scheduleWeeklyReport(client: Client): void {
 
           // Calcula o range da semana ANTERIOR (não a semana atual que acabou de começar)
           // Ex: relatório dispara segunda-feira → usa dados de segunda a domingo passados
-          const currentWeekStart = getPeriodStart(now, "weekly"); // esta segunda 00:00 UTC
+          const currentWeekStart = getPeriodStart(toLocalNow(timezone), "weekly"); // esta segunda 00:00 UTC (horário local)
           const prevWeekStart = new Date(currentWeekStart);
           prevWeekStart.setUTCDate(prevWeekStart.getUTCDate() - 7); // segunda passada 00:00 UTC
           const prevWeekEnd = currentWeekStart;                      // esta segunda 00:00 UTC (exclusive)
