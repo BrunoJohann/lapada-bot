@@ -28,8 +28,10 @@ export const data = new SlashCommandBuilder()
       .setName("modo")
       .setDescription("Comparação rápida (ignorado se p1_mes/p2_mes forem informados)")
       .addChoices(
-        { name: "Semana atual vs anterior",  value: "semana"  },
-        { name: "Mês atual vs anterior",     value: "mes"     }
+        { name: "Semana atual vs anterior",      value: "semana"        },
+        { name: "Semana passada vs retrasada",   value: "semana_passada"},
+        { name: "Mês atual vs anterior",         value: "mes"           },
+        { name: "Mês passado vs retrasado",      value: "mes_passado"   }
       )
   )
   // ── Period 1 ───────────────────────────────────────────────────────────────
@@ -79,35 +81,44 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Returns the range for the period BEFORE the one that starts at `periodStart`. */
-function previousPeriodRange(
-  periodStart: Date,
-  period: "weekly" | "monthly"
-): HistoricalRange {
-  if (period === "weekly") {
-    const end   = new Date(periodStart);
-    const start = new Date(periodStart);
-    start.setUTCDate(start.getUTCDate() - 7);
-    return {
-      start,
-      end,
-      label: `${fmtDate(start)} – ${fmtDate(new Date(end.getTime() - 86_400_000))}`,
-    };
-  } else {
-    // previous month
-    const end   = new Date(periodStart); // first of current month = exclusive end of prev month
-    const start = new Date(periodStart);
-    start.setUTCMonth(start.getUTCMonth() - 1);
-    return {
-      start,
-      end,
-      label: start.toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }),
-    };
-  }
-}
-
 function fmtDate(d: Date): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
+}
+
+/**
+ * Returns the range for a weekly period offset from `currentStart`.
+ * offset=0 → current week (start..now)
+ * offset=1 → previous week
+ * offset=2 → 2 weeks ago
+ */
+function weekRange(currentStart: Date, offset: number): HistoricalRange {
+  const start = new Date(currentStart);
+  start.setUTCDate(start.getUTCDate() - offset * 7);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 7);
+  return {
+    start,
+    end,
+    label: `${fmtDate(start)} – ${fmtDate(new Date(end.getTime() - 86_400_000))}`,
+  };
+}
+
+/**
+ * Returns the range for a monthly period offset from `currentMonthStart`.
+ * offset=0 → current month (start..now)
+ * offset=1 → previous month
+ * offset=2 → 2 months ago
+ */
+function monthRange(currentMonthStart: Date, offset: number): HistoricalRange {
+  const start = new Date(currentMonthStart);
+  start.setUTCMonth(start.getUTCMonth() - offset);
+  const end = new Date(start);
+  end.setUTCMonth(end.getUTCMonth() + 1);
+  return {
+    start,
+    end,
+    label: start.toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }),
+  };
 }
 
 // ── Execute ───────────────────────────────────────────────────────────────────
@@ -158,21 +169,34 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     range1 = r1;
     range2 = r2;
   } else {
-    // ── Quick mode: current vs previous period ────────────────────────────────
-    const modo    = (interaction.options.getString("modo") ?? "semana") as "semana" | "mes";
-    const period  = modo === "semana" ? "weekly" : "monthly";
+    // ── Quick mode ────────────────────────────────────────────────────────────
+    const modo     = (interaction.options.getString("modo") ?? "semana") as
+      "semana" | "semana_passada" | "mes" | "mes_passado";
     const localNow = toLocalNow(timezone);
 
-    const currentStart = getPeriodStart(localNow, period);
-    const currentEnd   = new Date(); // up to now
-
-    range2 = {
-      start: currentStart,
-      end:   currentEnd,
-      label: getPeriodLabel(localNow, period),
-    };
-
-    range1 = previousPeriodRange(currentStart, period);
+    if (modo === "semana" || modo === "semana_passada") {
+      const currentStart = getPeriodStart(localNow, "weekly");
+      if (modo === "semana") {
+        // atual (start→agora) vs semana anterior (completa)
+        range2 = { start: currentStart, end: new Date(), label: getPeriodLabel(localNow, "weekly") };
+        range1 = weekRange(currentStart, 1);
+      } else {
+        // semana passada (completa) vs retrasada (completa)
+        range2 = weekRange(currentStart, 1);
+        range1 = weekRange(currentStart, 2);
+      }
+    } else {
+      const currentStart = getPeriodStart(localNow, "monthly");
+      if (modo === "mes") {
+        // atual (start→agora) vs mês anterior (completo)
+        range2 = { start: currentStart, end: new Date(), label: getPeriodLabel(localNow, "monthly") };
+        range1 = monthRange(currentStart, 1);
+      } else {
+        // mês passado (completo) vs retrasado (completo)
+        range2 = monthRange(currentStart, 1);
+        range1 = monthRange(currentStart, 2);
+      }
+    }
   }
 
   // ── Fetch stats for both periods ───────────────────────────────────────────
