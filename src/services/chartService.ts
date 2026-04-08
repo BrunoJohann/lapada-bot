@@ -120,6 +120,135 @@ export async function buildActivityChart(
   return renderer.renderToBuffer(config) as Promise<Buffer>;
 }
 
+// ── Comparison Chart (two-line overlay) ────────────────────────────────────────
+
+const LINE_COLOR2  = "#57f287";
+const FILL_COLOR2  = "rgba(87,242,135,0.12)";
+
+export async function buildComparisonChart(
+  points1: DailyPoint[],
+  points2: DailyPoint[],
+  metric: ChartMetric,
+  label1: string,
+  label2: string,
+  title: string,
+  periodType: "weekly" | "monthly"
+): Promise<Buffer> {
+  const extract = (pts: DailyPoint[]) =>
+    metric === "voz"
+      ? pts.map((p) => p.voiceMinutes)
+      : pts.map((p) => Math.round(p.score * 10) / 10);
+
+  const raw1 = extract(points1);
+  const raw2 = extract(points2);
+  const len  = Math.max(raw1.length, raw2.length);
+
+  // Pad shorter series with 0
+  while (raw1.length < len) raw1.push(0);
+  while (raw2.length < len) raw2.push(0);
+
+  // Relative x-axis labels
+  const labels =
+    periodType === "weekly"
+      ? ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].slice(0, len)
+      : Array.from({ length: len }, (_, i) => String(i + 1).padStart(2, "0"));
+
+  const fmt = (v: number) =>
+    metric === "voz" ? minsToHours(Math.round(v)) : `${Math.round(v * 10) / 10} pts`;
+
+  const total1 = raw1.reduce((a, b) => a + b, 0);
+  const total2 = raw2.reduce((a, b) => a + b, 0);
+  const subtitle = `${label1}: ${fmt(total1)}   ·   ${label2}: ${fmt(total2)}`;
+
+  const yLabel = metric === "voz" ? "Tempo em voz" : "Pontos";
+  const ptSize = len <= 14 ? 5 : 3;
+
+  const config: ChartConfiguration = {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: label1,
+          data: raw1,
+          borderColor: LINE_COLOR,
+          backgroundColor: FILL_COLOR,
+          pointBackgroundColor: LINE_COLOR,
+          pointBorderColor: "#fff",
+          pointRadius: ptSize,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.35,
+        },
+        {
+          label: label2,
+          data: raw2,
+          borderColor: LINE_COLOR2,
+          backgroundColor: FILL_COLOR2,
+          pointBackgroundColor: LINE_COLOR2,
+          pointBorderColor: "#fff",
+          pointRadius: ptSize,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.35,
+        },
+      ],
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: TEXT_COLOR, font: { size: 12 }, boxWidth: 14 },
+        },
+        title: {
+          display: true,
+          text: title,
+          color: "#ffffff",
+          font: { size: 16, weight: "bold" },
+          padding: { bottom: 4 },
+        },
+        subtitle: {
+          display: true,
+          text: subtitle,
+          color: TEXT_COLOR,
+          font: { size: 12 },
+          padding: { bottom: 8 },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: TEXT_COLOR, font: { size: 11 }, maxRotation: 45 },
+          grid: { color: GRID_COLOR },
+          border: { color: GRID_COLOR },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: TEXT_COLOR,
+            font: { size: 11 },
+            ...(metric === "voz" && {
+              callback: (value) => minsToHours(Number(value)),
+            }),
+          },
+          grid: { color: GRID_COLOR },
+          border: { color: GRID_COLOR },
+          title: {
+            display: true,
+            text: yLabel,
+            color: TEXT_COLOR,
+            font: { size: 12 },
+          },
+        },
+      },
+      layout: { padding: { left: 16, right: 24, top: 8, bottom: 8 } },
+    },
+  };
+
+  return renderer.renderToBuffer(config) as Promise<Buffer>;
+}
+
 // ── Comparison Card ────────────────────────────────────────────────────────────
 
 export interface ComparisonCardData {

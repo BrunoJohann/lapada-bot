@@ -7,10 +7,9 @@ import {
 import {
   getAggregateStats,
   resolveHistoricalRange,
+  resolveQuickCompareRanges,
   searchActiveUsers,
-  toLocalNow,
-  getPeriodStart,
-  getPeriodLabel,
+  QuickCompareMode,
   HistoricalRange,
 } from "../services/metricsService";
 import { buildComparisonCard } from "../services/chartService";
@@ -81,46 +80,6 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtDate(d: Date): string {
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
-}
-
-/**
- * Returns the range for a weekly period offset from `currentStart`.
- * offset=0 → current week (start..now)
- * offset=1 → previous week
- * offset=2 → 2 weeks ago
- */
-function weekRange(currentStart: Date, offset: number): HistoricalRange {
-  const start = new Date(currentStart);
-  start.setUTCDate(start.getUTCDate() - offset * 7);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 7);
-  return {
-    start,
-    end,
-    label: `${fmtDate(start)} – ${fmtDate(new Date(end.getTime() - 86_400_000))}`,
-  };
-}
-
-/**
- * Returns the range for a monthly period offset from `currentMonthStart`.
- * offset=0 → current month (start..now)
- * offset=1 → previous month
- * offset=2 → 2 months ago
- */
-function monthRange(currentMonthStart: Date, offset: number): HistoricalRange {
-  const start = new Date(currentMonthStart);
-  start.setUTCMonth(start.getUTCMonth() - offset);
-  const end = new Date(start);
-  end.setUTCMonth(end.getUTCMonth() + 1);
-  return {
-    start,
-    end,
-    label: start.toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }),
-  };
-}
-
 // ── Execute ───────────────────────────────────────────────────────────────────
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -170,33 +129,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     range2 = r2;
   } else {
     // ── Quick mode ────────────────────────────────────────────────────────────
-    const modo     = (interaction.options.getString("modo") ?? "semana") as
-      "semana" | "semana_passada" | "mes" | "mes_passado";
-    const localNow = toLocalNow(timezone);
-
-    if (modo === "semana" || modo === "semana_passada") {
-      const currentStart = getPeriodStart(localNow, "weekly");
-      if (modo === "semana") {
-        // atual (start→agora) vs semana anterior (completa)
-        range2 = { start: currentStart, end: new Date(), label: getPeriodLabel(localNow, "weekly") };
-        range1 = weekRange(currentStart, 1);
-      } else {
-        // semana passada (completa) vs retrasada (completa)
-        range2 = weekRange(currentStart, 1);
-        range1 = weekRange(currentStart, 2);
-      }
-    } else {
-      const currentStart = getPeriodStart(localNow, "monthly");
-      if (modo === "mes") {
-        // atual (start→agora) vs mês anterior (completo)
-        range2 = { start: currentStart, end: new Date(), label: getPeriodLabel(localNow, "monthly") };
-        range1 = monthRange(currentStart, 1);
-      } else {
-        // mês passado (completo) vs retrasado (completo)
-        range2 = monthRange(currentStart, 1);
-        range1 = monthRange(currentStart, 2);
-      }
-    }
+    const modo = (interaction.options.getString("modo") ?? "semana") as QuickCompareMode;
+    ({ range1, range2 } = resolveQuickCompareRanges(modo, timezone));
   }
 
   // ── Fetch stats for both periods ───────────────────────────────────────────

@@ -457,6 +457,76 @@ export interface PeriodStats {
   score: number;
 }
 
+// ── Quick comparison range helpers ─────────────────────────────────────────
+
+export type QuickCompareMode = "semana" | "semana_passada" | "mes" | "mes_passado";
+
+function fmtDateLocal(d: Date): string {
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
+}
+
+/** Semana relativa ao início da semana atual (offset=0 → atual, 1 → passada, 2 → retrasada). */
+export function weekRangeOffset(currentStart: Date, offset: number): HistoricalRange {
+  const start = new Date(currentStart);
+  start.setUTCDate(start.getUTCDate() - offset * 7);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 7);
+  return {
+    start,
+    end,
+    label: `${fmtDateLocal(start)} – ${fmtDateLocal(new Date(end.getTime() - 86_400_000))}`,
+  };
+}
+
+/** Mês relativo ao início do mês atual (offset=0 → atual, 1 → passado, 2 → retrasado). */
+export function monthRangeOffset(currentMonthStart: Date, offset: number): HistoricalRange {
+  const start = new Date(currentMonthStart);
+  start.setUTCMonth(start.getUTCMonth() - offset);
+  const end = new Date(start);
+  end.setUTCMonth(end.getUTCMonth() + 1);
+  return {
+    start,
+    end,
+    label: start.toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }),
+  };
+}
+
+/** Resolve os dois ranges de um modo de comparação rápida. */
+export function resolveQuickCompareRanges(
+  mode: QuickCompareMode,
+  timezone: string
+): { range1: HistoricalRange; range2: HistoricalRange } {
+  const localNow = toLocalNow(timezone);
+
+  if (mode === "semana" || mode === "semana_passada") {
+    const currentStart = getPeriodStart(localNow, "weekly");
+    if (mode === "semana") {
+      return {
+        range1: weekRangeOffset(currentStart, 1),
+        range2: { start: currentStart, end: new Date(), label: getPeriodLabel(localNow, "weekly") },
+      };
+    } else {
+      return {
+        range1: weekRangeOffset(currentStart, 2),
+        range2: weekRangeOffset(currentStart, 1),
+      };
+    }
+  } else {
+    const currentStart = getPeriodStart(localNow, "monthly");
+    if (mode === "mes") {
+      return {
+        range1: monthRangeOffset(currentStart, 1),
+        range2: { start: currentStart, end: new Date(), label: getPeriodLabel(localNow, "monthly") },
+      };
+    } else {
+      return {
+        range1: monthRangeOffset(currentStart, 2),
+        range2: monthRangeOffset(currentStart, 1),
+      };
+    }
+  }
+}
+
 export async function getAggregateStats(
   guildId: string,
   start: Date,
