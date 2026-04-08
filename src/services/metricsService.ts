@@ -1,5 +1,7 @@
 import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
+import { calculateScore } from "../utils/scoring";
+import { getLocalDayBoundaries, toLocalNow, getPeriodStart } from "../utils/dateUtils";
 
 export interface UserScore {
   userId: string;
@@ -11,66 +13,6 @@ export interface UserScore {
   reactionsCount: number;
   score: number;
   rank: number;
-}
-
-function calculateScore(
-  messageCount: number,
-  voiceMinutes: number,
-  streamMinutes: number,
-  reactionsCount: number,
-  streakDays: number = 0,
-  voiceMultiplier: number = 2.0,
-  streamMultiplier: number = 0
-): number {
-  const base =
-    messageCount * 1.0 +
-    voiceMinutes * voiceMultiplier +
-    streamMinutes * streamMultiplier +
-    reactionsCount * 1.5;
-
-  return base * (1 + streakDays * 0.05);
-}
-
-/**
- * Computes the UTC timestamps for the start and end of the local day that contains `utcDate`.
- * The `localDate` key is UTC midnight of that local date (used as the DailyAggregate primary key).
- *
- * Example for BRT (UTC-3): "April 5 local" → dayStart = 03:00 UTC Apr 5, dayEnd = 03:00 UTC Apr 6.
- */
-function getLocalDayBoundaries(
-  utcDate: Date,
-  timezone: string
-): { dayStart: Date; dayEnd: Date; localDate: Date } {
-  // Get the local date string (YYYY-MM-DD) for this UTC instant
-  const localDateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: timezone }).format(utcDate);
-
-  // Find what local time shows when UTC is at midnight of this local date
-  const utcMidnight = new Date(localDateStr + "T00:00:00Z");
-  const localTimeAtUtcMidnight = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(utcMidnight);
-
-  const [hStr, mStr] = localTimeAtUtcMidnight.split(":");
-  const h = parseInt(hStr) === 24 ? 0 : parseInt(hStr);
-  const m = parseInt(mStr);
-  const localMinsAtUtcMidnight = h * 60 + m;
-
-  // Compute UTC timestamp for local midnight:
-  // If local shows 21:00 at UTC midnight (UTC-3), local midnight = UTC midnight + 3h
-  // If local shows 05:30 at UTC midnight (UTC+5:30), local midnight = UTC midnight - 5.5h
-  const dayStartMs =
-    localMinsAtUtcMidnight > 720
-      ? utcMidnight.getTime() + (1440 - localMinsAtUtcMidnight) * 60_000
-      : utcMidnight.getTime() - localMinsAtUtcMidnight * 60_000;
-
-  return {
-    dayStart:  new Date(dayStartMs),
-    dayEnd:    new Date(dayStartMs + 86_400_000),
-    localDate: utcMidnight, // UTC midnight = unique key for this local date
-  };
 }
 
 export async function aggregateDaily(guildId: string, date: Date): Promise<void> {
@@ -90,10 +32,6 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
       prisma.messageActivity.count({
         where: { userId: user.id, guildId, createdAt: { gte: dayStart, lt: dayEnd } },
       }),
-      // Inclui sessões que cruzam a fronteira do dia local:
-      // (1) começou e terminou dentro do dia
-      // (2) começou antes, terminou dentro do dia
-      // (3) começou antes e ainda está aberta (pode estar cruzando a meia-noite local)
       prisma.voiceSession.findMany({
         where: {
           userId: user.id,
@@ -129,8 +67,6 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
 
     const now = Date.now();
 
-    // Calcula duração apenas dentro dos limites do dia local (clamp)
-    // Sessões que cruzam a meia-noite local são divididas entre os dois dias
     const voiceMinutes = Math.floor(
       voiceSessions.reduce((sum, s) => {
         const start = Math.max(s.joinedAt.getTime(), dayStart.getTime());
@@ -152,7 +88,6 @@ export async function aggregateDaily(guildId: string, date: Date): Promise<void>
         }, 0) / 60000
     );
 
-    // Preserva pontos manuais adicionados por admin (não são sobrescritos pelo aggregate)
     const existing = await prisma.dailyAggregate.findUnique({
       where: { userId_guildId_date: { userId: user.id, guildId, date: localDate } },
       select: { manualPoints: true },
@@ -196,15 +131,15 @@ export async function getLeaderboard(
   return aggregates.map((agg, index) => {
     const user = userMap.get(agg.userId);
     return {
-      userId: agg.userId,
-      username: user?.username ?? "Usuário Desconhecido",
-      displayName: user?.displayName ?? null,
-      messageCount: agg._sum.messageCount ?? 0,
-      voiceMinutes: agg._sum.voiceMinutes ?? 0,
+      userId:        agg.userId,
+      username:      user?.username      ?? "Usuário Desconhecido",
+      displayName:   user?.displayName   ?? null,
+      messageCount:  agg._sum.messageCount  ?? 0,
+      voiceMinutes:  agg._sum.voiceMinutes  ?? 0,
       streamMinutes: agg._sum.streamMinutes ?? 0,
-      reactionsCount: agg._sum.reactionsCount ?? 0,
-      score: agg._sum.score ?? 0,
-      rank: index + 1,
+      reactionsCount:agg._sum.reactionsCount ?? 0,
+      score:         agg._sum.score         ?? 0,
+      rank:          index + 1,
     };
   });
 }
@@ -236,14 +171,14 @@ export async function getUserStats(
 
   return {
     userId,
-    username: user?.username ?? "Desconhecido",
-    displayName: user?.displayName ?? null,
-    messageCount: agg._sum.messageCount ?? 0,
-    voiceMinutes: agg._sum.voiceMinutes ?? 0,
+    username:      user?.username    ?? "Desconhecido",
+    displayName:   user?.displayName ?? null,
+    messageCount:  agg._sum.messageCount  ?? 0,
+    voiceMinutes:  agg._sum.voiceMinutes  ?? 0,
     streamMinutes: agg._sum.streamMinutes ?? 0,
-    reactionsCount: agg._sum.reactionsCount ?? 0,
-    score: agg._sum.score ?? 0,
-    rank: betterUsers.length + 1,
+    reactionsCount:agg._sum.reactionsCount ?? 0,
+    score:         agg._sum.score         ?? 0,
+    rank:          betterUsers.length + 1,
   };
 }
 
@@ -265,109 +200,6 @@ export async function searchActiveUsers(
   });
 
   return users.map((u) => ({ id: u.id, label: u.displayName ?? u.username }));
-}
-
-/**
- * Returns a Date whose UTC fields represent the current local time in the given timezone.
- * Allows getPeriodStart (which uses getUTC* methods) to operate on local time instead of UTC.
- * Example: at 21:23 BRT (UTC-3) = 00:23 UTC, this returns a date where getUTCHours() === 21.
- */
-export function toLocalNow(timezone: string): Date {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
-  const h = get("hour");
-  return new Date(Date.UTC(get("year"), get("month") - 1, get("day"), h === 24 ? 0 : h, get("minute"), get("second")));
-}
-
-export function getPeriodStart(date: Date, period: "weekly" | "monthly"): Date {
-  const start = new Date(date);
-  if (period === "weekly") {
-    const day = start.getUTCDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    start.setUTCDate(start.getUTCDate() + diff);
-  } else {
-    start.setUTCDate(1);
-  }
-  start.setUTCHours(0, 0, 0, 0);
-  return start;
-}
-
-export function getPeriodLabel(date: Date, period: "weekly" | "monthly"): string {
-  if (period === "weekly") {
-    const start = getPeriodStart(date, "weekly");
-    const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 6);
-    return `${fmtDate(start)} – ${fmtDate(end)}`;
-  } else {
-    return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  }
-}
-
-function fmtDate(d: Date): string {
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-}
-
-// ── Histórico ──────────────────────────────────────────────────────────────
-
-export interface HistoricalRange {
-  start: Date;
-  end: Date;
-  label: string;
-}
-
-/**
- * Resolve um intervalo histórico a partir de semana/mês/ano.
- *
- * Para semanas: usa o mesmo sistema ISO do bot (segunda→domingo).
- *   A âncora é a primeira segunda-feira do mês.
- *   Semana 1 = primeira segunda-feira até o domingo seguinte.
- *   Semana 2 = segunda segunda-feira até o domingo seguinte. Etc.
- *   Dias anteriores à primeira segunda-feira pertencem à última semana
- *   do mês anterior (ex: dia 1 domingo → consulte o mês anterior).
- *
- * Para meses: primeiro ao último dia do mês.
- *
- * Retorna null quando nenhum parâmetro histórico foi fornecido.
- */
-export function resolveHistoricalRange(
-  semana: number | null,
-  mes: number | null,
-  ano: number | null
-): HistoricalRange | null {
-  if (!mes && !semana) return null;
-
-  const now = new Date();
-  const year  = ano  ?? now.getUTCFullYear();
-  const month = (mes ?? (now.getUTCMonth() + 1)) - 1; // 0-indexed para Date.UTC
-
-  if (semana !== null) {
-    // Encontra a primeira segunda-feira do mês (alinha com getPeriodStart "weekly")
-    const firstOfMonth   = new Date(Date.UTC(year, month, 1));
-    const firstDayOfWeek = firstOfMonth.getUTCDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
-    // Dias até a próxima segunda: 0 se já for segunda, 1 se for domingo, etc.
-    const daysToFirstMonday = firstDayOfWeek === 1 ? 0 : firstDayOfWeek === 0 ? 1 : 8 - firstDayOfWeek;
-    const firstMondayDay    = 1 + daysToFirstMonday;
-
-    // Semana N começa em firstMonday + (N-1) * 7 dias
-    const weekStartDay = firstMondayDay + (semana - 1) * 7;
-    const start = new Date(Date.UTC(year, month, weekStartDay));       // pode transbordar para mês seguinte
-    const end   = new Date(Date.UTC(year, month, weekStartDay + 7));   // exclusive
-
-    const displayEnd = new Date(end.getTime() - 86_400_000);
-    const label = `Semana ${semana} — ${fmtDate(start)} a ${fmtDate(displayEnd)}`;
-    return { start, end, label };
-  } else {
-    const start = new Date(Date.UTC(year, month, 1));
-    const end   = new Date(Date.UTC(year, month + 1, 1));
-    const label = start.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-    return { start, end, label };
-  }
 }
 
 export async function getLeaderboardForRange(
@@ -411,10 +243,6 @@ export interface DailyPoint {
   messageCount: number;
 }
 
-/**
- * Retorna uma série temporal por dia para um gráfico de atividade.
- * Se userId for omitido, agrega todos os usuários do servidor.
- */
 export async function getDailyBreakdown(
   guildId: string,
   start: Date,
@@ -432,13 +260,12 @@ export async function getDailyBreakdown(
     orderBy: { date: "asc" },
   });
 
-  // Preenche dias sem dados com zero para a linha não ter lacunas
   const points: DailyPoint[] = [];
   const cursor = new Date(start);
   while (cursor < end) {
     const row = rows.find((r) => r.date.getTime() === cursor.getTime());
     points.push({
-      date: new Date(cursor),
+      date:         new Date(cursor),
       voiceMinutes: row?._sum.voiceMinutes ?? 0,
       score:        row?._sum.score        ?? 0,
       messageCount: row?._sum.messageCount ?? 0,
@@ -591,3 +418,12 @@ export async function getUserStatsForRange(
     rank:          betterUsers.length + 1,
   };
 }
+
+// ── Re-exports (bridge para importadores que ainda usam metricsService) ───────
+export {
+  toLocalNow,
+  getPeriodStart,
+  getPeriodLabel,
+  resolveHistoricalRange,
+} from "../utils/dateUtils";
+export type { HistoricalRange } from "../utils/dateUtils";
