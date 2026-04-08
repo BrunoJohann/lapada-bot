@@ -449,6 +449,44 @@ export async function getDailyBreakdown(
   return points;
 }
 
+export interface PeriodStats {
+  voiceMinutes: number;
+  messageCount: number;
+  reactionsCount: number;
+  streamMinutes: number;
+  score: number;
+}
+
+export async function getAggregateStats(
+  guildId: string,
+  start: Date,
+  end: Date,
+  userId?: string
+): Promise<PeriodStats> {
+  const where = userId
+    ? { guildId, userId, date: { gte: start, lt: end } }
+    : { guildId, date: { gte: start, lt: end } };
+
+  const agg = await prisma.dailyAggregate.aggregate({
+    where,
+    _sum: {
+      voiceMinutes: true,
+      messageCount: true,
+      reactionsCount: true,
+      streamMinutes: true,
+      score: true,
+    },
+  });
+
+  return {
+    voiceMinutes:   agg._sum.voiceMinutes   ?? 0,
+    messageCount:   agg._sum.messageCount   ?? 0,
+    reactionsCount: agg._sum.reactionsCount ?? 0,
+    streamMinutes:  agg._sum.streamMinutes  ?? 0,
+    score:          agg._sum.score          ?? 0,
+  };
+}
+
 export async function getUserStatsForRange(
   userId: string,
   guildId: string,
