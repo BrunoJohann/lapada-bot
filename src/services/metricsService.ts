@@ -1,7 +1,7 @@
 import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
 import { calculateScore } from "../utils/scoring";
-import { getLocalDayBoundaries, toLocalNow, getPeriodStart } from "../utils/dateUtils";
+import { getLocalDayBoundaries, toLocalNow, getPeriodStart, getPeriodLabel, HistoricalRange } from "../utils/dateUtils";
 
 export interface UserScore {
   userId: string;
