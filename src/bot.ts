@@ -8,7 +8,7 @@ import { checkDbConnection } from "./database/prisma";
 import { scheduleWeeklyReport } from "./tasks/weeklyReport";
 import { scheduleMonthlyReport, scheduleDailyAggregate } from "./tasks/monthlyReport";
 import { scheduleDailyLeaderboard } from "./tasks/dailyLeaderboard";
-import { reconcileOpenSessions } from "./tasks/reconcileSessions";
+import { reconcileOpenSessions, scheduleSessionReconciliation } from "./tasks/reconcileSessions";
 
 registerProcessHandlers();
 
@@ -100,6 +100,7 @@ client.once(Events.ClientReady, (c) => {
   scheduleMonthlyReport(client);
   scheduleDailyAggregate(client);
   scheduleDailyLeaderboard(client);
+  scheduleSessionReconciliation(c);
 });
 
 async function main(): Promise<void> {

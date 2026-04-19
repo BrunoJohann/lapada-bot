@@ -150,29 +150,32 @@ export async function execute(oldState: VoiceState, newState: VoiceState): Promi
 }
 
 async function closeOpenVoice(userId: string, guildId: string): Promise<void> {
-  const open = await prisma.voiceSession.findFirst({
+  const now = new Date();
+  const open = await prisma.voiceSession.findMany({
     where: { userId, guildId, leftAt: null },
     orderBy: { joinedAt: "desc" },
   });
-  if (open) {
-    const leftAt = new Date();
+  if (open.length > 1) {
+    logger.warn(`[voiceStateUpdate] ${open.length} sessões de voz abertas para userId=${userId} — possível race condition. Fechando todas.`);
+  }
+  for (const session of open) {
     await prisma.voiceSession.update({
-      where: { id: open.id },
-      data: { leftAt, durationMs: leftAt.getTime() - open.joinedAt.getTime() },
+      where: { id: session.id },
+      data: { leftAt: now, durationMs: Math.max(0, now.getTime() - session.joinedAt.getTime()) },
     });
   }
 }
 
 async function closeOpenStream(userId: string, guildId: string): Promise<void> {
-  const open = await prisma.streamSession.findFirst({
+  const now = new Date();
+  const open = await prisma.streamSession.findMany({
     where: { userId, guildId, endedAt: null },
     orderBy: { startedAt: "desc" },
   });
-  if (open) {
-    const endedAt = new Date();
+  for (const session of open) {
     await prisma.streamSession.update({
-      where: { id: open.id },
-      data: { endedAt, durationMs: endedAt.getTime() - open.startedAt.getTime() },
+      where: { id: session.id },
+      data: { endedAt: now, durationMs: Math.max(0, now.getTime() - session.startedAt.getTime()) },
     });
   }
 }

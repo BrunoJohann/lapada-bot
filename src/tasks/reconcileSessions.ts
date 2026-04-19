@@ -1,4 +1,5 @@
 import { Client } from "discord.js";
+import cron from "node-cron";
 import { prisma } from "../database/prisma";
 import { logger } from "../utils/logger";
 
@@ -34,18 +35,41 @@ export async function reconcileOpenSessions(client: Client): Promise<void> {
       const openVoice = await prisma.voiceSession.findMany({
         where: { guildId: guild.id, leftAt: null },
         select: { id: true, userId: true, joinedAt: true },
+        orderBy: { joinedAt: "desc" },
       });
 
+      // Agrupa por userId para detectar duplicatas
+      const voiceByUser = new Map<string, typeof openVoice>();
       for (const session of openVoice) {
-        if (membersInVoice.has(session.userId)) continue; // ainda está em voz, OK
+        const list = voiceByUser.get(session.userId) ?? [];
+        list.push(session);
+        voiceByUser.set(session.userId, list);
+      }
 
-        const leftAt = new Date();
-        await prisma.voiceSession.update({
-          where: { id: session.id },
-          data:  { leftAt, durationMs: leftAt.getTime() - session.joinedAt.getTime() },
-        });
-        closedVoice++;
-        logger.debug(`Voz fechada: userId=${session.userId} guild=${guild.id} (bot estava offline)`);
+      const now = new Date();
+      for (const [userId, sessions] of voiceByUser) {
+        if (membersInVoice.has(userId)) {
+          // Usuário ainda em voz: fechar duplicatas (manter só a mais recente)
+          const duplicates = sessions.slice(1); // já ordenado desc, primeira é a mais recente
+          for (const dup of duplicates) {
+            await prisma.voiceSession.update({
+              where: { id: dup.id },
+              data:  { leftAt: now, durationMs: Math.max(0, now.getTime() - dup.joinedAt.getTime()) },
+            });
+            closedVoice++;
+            logger.warn(`Sessão duplicada fechada: userId=${userId} guild=${guild.id} sessionId=${dup.id}`);
+          }
+          continue;
+        }
+        // Usuário fora do canal: fechar todas
+        for (const session of sessions) {
+          await prisma.voiceSession.update({
+            where: { id: session.id },
+            data:  { leftAt: now, durationMs: Math.max(0, now.getTime() - session.joinedAt.getTime()) },
+          });
+          closedVoice++;
+          logger.debug(`Voz fechada: userId=${userId} guild=${guild.id}`);
+        }
       }
 
       // Sessões de stream abertas para esta guild
@@ -57,13 +81,12 @@ export async function reconcileOpenSessions(client: Client): Promise<void> {
       for (const session of openStream) {
         if (membersStreaming.has(session.userId)) continue; // ainda está streamando, OK
 
-        const endedAt = new Date();
         await prisma.streamSession.update({
           where: { id: session.id },
-          data:  { endedAt, durationMs: endedAt.getTime() - session.startedAt.getTime() },
+          data:  { endedAt: now, durationMs: Math.max(0, now.getTime() - session.startedAt.getTime()) },
         });
         closedStream++;
-        logger.debug(`Stream fechado: userId=${session.userId} guild=${guild.id} (bot estava offline)`);
+        logger.debug(`Stream fechado: userId=${session.userId} guild=${guild.id}`);
       }
     } catch (error) {
       logger.error(`Erro ao reconciliar sessões da guild ${guild.id}:`, error);
@@ -71,4 +94,14 @@ export async function reconcileOpenSessions(client: Client): Promise<void> {
   }
 
   logger.info(`Reconciliação concluída: ${closedVoice} sessões de voz e ${closedStream} de stream fechadas.`);
+}
+
+// Roda a cada 30 minutos para pegar sessões que ficaram abertas durante o uptime do bot
+export function scheduleSessionReconciliation(client: Client): void {
+  cron.schedule("*/30 * * * *", () => {
+    reconcileOpenSessions(client).catch((err) =>
+      logger.error("Erro na reconciliação periódica de sessões:", err)
+    );
+  });
+  logger.info("Reconciliação periódica agendada (a cada 30min).");
 }
