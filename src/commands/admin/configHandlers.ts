@@ -7,6 +7,7 @@ import { invalidateGuildConfig } from "../../utils/guildConfig";
 import { resolveHistoricalRange } from "../../utils/dateUtils";
 import { aggregateDaily } from "../../services/metricsService";
 import { processRewards, processChallengeRewards } from "../../services/rewardsService";
+import { logger } from "../../utils/logger";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -251,6 +252,52 @@ export async function executeConfigCommand(interaction: ChatInputCommandInteract
       `> Período: ${periodoLabel}\n` +
       `> Motivo: ${motivo}\n` +
       `> Total manual no período: **${newManual >= 0 ? "+" : ""}${newManual.toFixed(1)} pts**`
+    );
+    return;
+  } else if (sub === "fechar-sessao") {
+    const targetUser = interaction.options.getUser("usuario", true);
+    const minutosCreditar = interaction.options.getInteger("minutos") ?? 0;
+
+    const openSessions = await prisma.voiceSession.findMany({
+      where: { userId: targetUser.id, guildId, leftAt: null },
+      orderBy: { joinedAt: "asc" },
+    });
+
+    if (openSessions.length === 0) {
+      await interaction.editReply(`ℹ️ <@${targetUser.id}> não tem nenhuma sessão de voz aberta.`);
+      return;
+    }
+
+    const now = new Date();
+    const creditMs = minutosCreditar * 60_000;
+
+    for (const session of openSessions) {
+      const accumulatedMs = now.getTime() - session.joinedAt.getTime();
+      const accumulatedMin = Math.floor(accumulatedMs / 60_000);
+      await prisma.voiceSession.update({
+        where: { id: session.id },
+        data: { leftAt: now, durationMs: creditMs },
+      });
+      logger.info(
+        `[fechar-sessao] Sessão ${session.id} de ${targetUser.username} fechada por admin ` +
+        `(acumulado: ${accumulatedMin}min → creditado: ${minutosCreditar}min)`
+      );
+    }
+
+    const totalAccumulatedMs = openSessions.reduce((sum, s) => sum + (now.getTime() - s.joinedAt.getTime()), 0);
+    const totalAccumulatedMin = Math.floor(totalAccumulatedMs / 60_000);
+    const hAcum = Math.floor(totalAccumulatedMin / 60);
+    const mAcum = totalAccumulatedMin % 60;
+    const acumLabel = hAcum > 0 ? `${hAcum}h ${mAcum}min` : `${mAcum}min`;
+
+    await interaction.editReply(
+      `🔒 **Sessão(ões) de voz fechada(s)** para <@${targetUser.id}>\n` +
+      `> Sessões fechadas: **${openSessions.length}**\n` +
+      `> Tempo acumulado (descartado): **${acumLabel}**\n` +
+      `> Tempo creditado: **${minutosCreditar}min**\n` +
+      (minutosCreditar === 0
+        ? `> ⚠️ A sessão bugada foi fechada sem pontuar.`
+        : `> ✅ Foram creditados ${minutosCreditar} minuto(s) de voz.`)
     );
     return;
   } else if (sub === "cargo-participante-remover") {
