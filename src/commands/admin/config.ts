@@ -305,6 +305,22 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub
+      .setName("fechar-sessao")
+      .setDescription("Fecha sessão de voz aberta de um usuário bugado (descarta ou credita tempo personalizado)")
+      .addUserOption((opt) =>
+        opt.setName("usuario").setDescription("Usuário com sessão aberta a fechar").setRequired(true)
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName("minutos")
+          .setDescription("Minutos a creditar pela sessão (padrão: 0 = fecha sem pontuar)")
+          .setMinValue(0)
+          .setMaxValue(1440)
+          .setRequired(false)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
       .setName("remover-pontos")
       .setDescription("Remove pontos manualmente de um usuário (em um período específico ou hoje)")
       .addUserOption((opt) =>
