@@ -4,3 +4,9 @@ dist
 .env.local
 docker-compose.yml
 *.md
+src/__tests__
+vitest.config.ts
+.git
+.gitignore
+Dockerfile.dev
+.env.*
